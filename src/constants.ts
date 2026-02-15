@@ -1,6 +1,5 @@
 import { AppData, ExerciseDef } from './types';
 
-// Updated from Snapshot Data provided
 export const FALLBACK_EXERCISES: { [key: string]: ExerciseDef } = {
   "bd": { "id": "bd", "n": "Rudern einarmig auf Bank abgestützt ", "c": "Rücken", "t": "pull", "h": "7", "defW": 67.5 },
   "dips": { "id": "dips", "n": "Dips", "c": "Brust", "t": "push", "defW": 15, "h": "0" },
@@ -28,9 +27,8 @@ export const FALLBACK_EXERCISES: { [key: string]: ExerciseDef } = {
   "tennis_2": { "id": "tennis_2", "n": "Tennis Doppel", "c": "Tennis", "t": "cardio", "defW": 0, "h": 0 }
 };
 
-// FULL INJECTED HISTORY FROM SNAPSHOT (Up to Feb 2026)
+// FULL INJECTED HISTORY FROM SNAPSHOT (Merged and Updated)
 export const INJECTED_HISTORY = [
-  {"d":1771177158309,"t":"01:15:00","note":"","s":{"lat":{"sets":[{"w":45,"r":15,"rpe":3,"type":"A"},{"w":76.5,"r":13,"rpe":1,"type":"A"},{"w":76.5,"r":12,"rpe":1,"type":"A"}],"order":1},"bd":{"sets":[{"w":45,"r":10,"rpe":3,"type":"A"},{"w":63,"r":10,"rpe":0,"type":"A"},{"w":63,"r":9,"rpe":0,"type":"A"}],"order":2},"ex_1768675631669":{"sets":[{"w":45,"r":14,"rpe":3,"type":"A"},{"w":63,"r":12,"rpe":0,"type":"A"},{"w":63,"r":11,"rpe":0,"type":"A"}],"order":3},"sh_o":{"sets":[{"w":13.5,"r":10,"rpe":3,"type":"A"},{"w":18,"r":12,"rpe":1,"type":"A"},{"w":18,"r":11,"rpe":0,"type":"A"}],"order":4},"sh_g":{"sets":[{"w":13.5,"r":11,"rpe":0,"type":"A"},{"w":13.5,"r":11,"rpe":0,"type":"A"}],"order":5},"sh_u":{"sets":[{"w":22.5,"r":10,"rpe":1,"type":"A"},{"w":22.5,"r":11,"rpe":0,"type":"A"}],"order":6},"bi_c":{"sets":[{"w":40.5,"r":12,"rpe":1,"type":"A"},{"w":40.5,"r":10,"rpe":0,"type":"A"}],"order":7},"bi_h":{"sets":[{"w":63,"r":12,"rpe":0,"type":"A"},{"w":63,"r":11,"rpe":0,"type":"A"}],"order":8},"tr_o":{"sets":[{"w":58.5,"r":11,"rpe":1,"type":"A"},{"w":58.5,"r":10,"rpe":0,"type":"A"}],"order":9}}},
   {"d":1771005600000,"t":"00:56:00","note":"Valentine's Pump (14.02.) - Daten wiederhergestellt","s":{"f_t":{"sets":[{"w":27,"r":12,"rpe":3,"type":"W"},{"w":45,"r":11,"rpe":1,"type":"A"},{"w":45,"r":10,"rpe":1,"type":"A"}],"order":1},"f_g":{"sets":[{"w":45,"r":11,"rpe":1,"type":"A"},{"w":45,"r":8,"rpe":1,"type":"A"},{"w":45,"r":8,"rpe":0,"type":"A"}],"order":2},"f_u":{"sets":[{"w":18,"r":15,"rpe":4,"type":"W"},{"w":31.5,"r":11,"rpe":1,"type":"A"},{"w":31.5,"r":9,"rpe":0,"type":"A"}],"order":3},"bi_c":{"sets":[{"w":40.5,"r":10,"rpe":0,"type":"A"},{"w":40.5,"r":9,"rpe":0,"type":"A"}],"order":4},"bi_h":{"sets":[{"w":63,"r":11,"rpe":0,"type":"A"},{"w":63,"r":11,"rpe":0,"type":"A"}],"order":5},"tr_d":{"sets":[{"w":63,"r":11,"rpe":0,"type":"A"},{"w":63,"r":10,"rpe":0,"type":"A"}],"order":6}}},
   {"d":1770926400000,"t":"01:30:00","note":"Nachtrag 12.02 - Tennis / Cardio","s":{"tennis_1":{"sets":[{"w":0,"r":0,"type":"A"}],"order":1}}},
   {"d":1770834732319,"t":"00:52:09","note":"","s":{"lat":{"sets":[{"w":40.5,"r":17,"rpe":3,"type":"A"},{"w":76.5,"r":13,"rpe":0,"type":"A"},{"w":76.5,"r":12,"rpe":0,"type":"A"}],"order":1},"ex_1768675631669":{"sets":[{"w":45,"r":16,"rpe":1,"type":"A"},{"w":72,"r":8,"rpe":0,"type":"A"},{"w":72,"r":7,"rpe":0,"type":"A"}],"order":2},"bd":{"sets":[{"w":40.5,"r":17,"rpe":3,"type":"A"},{"w":63,"r":11,"rpe":0,"type":"A"},{"w":63,"r":10,"rpe":0,"type":"A"},{"w":49.5,"r":14,"rpe":0,"type":"A"}],"order":3},"sh_o":{"sets":[{"w":9,"r":20,"rpe":2,"type":"A"},{"w":18,"r":10,"rpe":1,"type":"A"},{"w":18,"r":9,"rpe":0,"type":"A"}],"order":4}}},
@@ -64,8 +62,6 @@ export const INJECTED_HISTORY = [
 ];
 
 export const INJECTED_BODY = [
-  {"d":"2026-02-15","w":"73.9","s":"10224"},
-  {"d":"2026-02-14","w":"74.5","s":"8540"},
   {"d":"2026-02-13","w":"73.2","s":""},
   {"d":"2026-02-12","w":"72.8","s":"7782"},
   {"d":"2026-02-11","w":"73.0","s":"4567"},

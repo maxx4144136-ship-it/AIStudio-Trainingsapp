@@ -1,4 +1,3 @@
-
 export type MuscleGroup = 'Brust' | 'Rücken' | 'Schultern' | 'Arme' | 'Beine' | 'Tennis';
 export type ExerciseType = 'push' | 'pull' | 'beine' | 'arme' | 'cardio';
 
@@ -17,7 +16,6 @@ export interface SetLog {
   r: number; // reps
   rpe?: number;
   type: 'A' | 'W'; // Arbeittssatz or Warmup
-  completed?: boolean; // New field for UI toggle
 }
 
 export interface WorkoutLog {
