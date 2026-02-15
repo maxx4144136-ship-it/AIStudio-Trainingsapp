@@ -1,7 +1,7 @@
 {
-  "name": "training-master-pro-v27.24-(stable)",
+  "name": "training-master-pro",
   "private": true,
-  "version": "0.0.0",
+  "version": "27.24.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,16 +9,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react-dom": "^19.2.4",
+    "@google/genai": "^1.41.0",
     "lucide-react": "^0.563.0",
     "react": "^19.2.4",
-    "recharts": "^3.7.0",
-    "@google/genai": "^1.41.0"
+    "react-dom": "^19.2.4",
+    "recharts": "^3.7.0"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.2.2",
+    "vite": "^5.2.0"
   }
 }
