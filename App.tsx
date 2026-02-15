@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Home, Zap, Trash2, Scale, History, BarChart3, Settings, X, Check, 
-  Calendar, Pill, Activity, User, Cpu, Trophy, Edit3, Save, Copy, Upload, FileJson, Play, Square, CheckSquare
+  Calendar, Pill, Activity, User, Cpu, Trophy, Edit3, Save, Copy, Upload, FileJson, Play, Square, CheckSquare, Search
 } from 'lucide-react';
 import { AppData, ExerciseDef, GitHubConfig, ActiveSession, MuscleGroup, WorkoutLog } from './types';
 import { FALLBACK_DATA, CAT_ORDER } from './constants';
@@ -1072,6 +1072,28 @@ const App = () => {
           else showToast("Fehler beim Speichern ❌");
       };
 
+      const verifySync = async () => {
+          const remote = await fetchFromGitHub(ghConfig);
+          if (!remote) {
+              showToast("Verbindung fehlgeschlagen ❌");
+              return;
+          }
+
+          const localCount = data.h.length;
+          const remoteCount = remote.h.length;
+          // Sort to ensure we get the latest
+          const localLast = [...data.h].sort((a,b) => b.d - a.d)[0]?.d || 0;
+          const remoteLast = [...remote.h].sort((a,b) => b.d - a.d)[0]?.d || 0;
+
+          if (localCount === remoteCount && localLast === remoteLast) {
+              showToast("Daten sind synchron! ✅");
+          } else if (localLast > remoteLast) {
+              showToast(`Lokal ist neuer (${localCount} vs ${remoteCount}) ⚠️`);
+          } else {
+              showToast(`GitHub ist neuer (${remoteCount} vs ${localCount}) 📥`);
+          }
+      };
+
       const reset = () => {
           if(confirm("Alles zurücksetzen?")) {
               saveData(FALLBACK_DATA);
@@ -1093,7 +1115,7 @@ const App = () => {
                       <button onClick={saveConfig} className="w-full py-3 bg-zinc-800 rounded-xl font-bold text-xs uppercase text-zinc-300">Config Speichern</button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3 mb-3">
                       <button onClick={load} className="py-4 bg-blue-900/30 text-blue-400 rounded-2xl font-black border border-blue-900/50 flex flex-col items-center gap-2">
                           <span className="text-2xl">📥</span>
                           <span className="text-[10px] uppercase">Laden</span>
@@ -1103,6 +1125,11 @@ const App = () => {
                           <span className="text-[10px] uppercase">Speichern</span>
                       </button>
                   </div>
+                  
+                  <button onClick={verifySync} className="w-full py-4 bg-zinc-800 text-zinc-300 rounded-2xl font-black border border-zinc-700 flex items-center justify-center gap-2">
+                      <Search size={18} />
+                      <span className="text-xs uppercase">Sync Prüfen</span>
+                  </button>
 
                    <button onClick={reset} className="w-full mt-6 py-4 bg-red-900/20 text-red-500 rounded-2xl font-black text-xs uppercase border border-red-900/30">
                       APP RESET (DANGER)
