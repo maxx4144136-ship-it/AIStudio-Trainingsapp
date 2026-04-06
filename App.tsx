@@ -8,13 +8,12 @@ import { FALLBACK_DATA, CAT_ORDER } from './constants';
 import { calculateProgression, calculateWarmup, generateSnapshotHTML } from './utils/logic';
 import { fetchFromGitHub, saveToGitHub } from './services/github';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart, CartesianGrid, LabelList, ComposedChart, Bar } from 'recharts';
-import { auth, db, loginWithGoogle, logout } from './firebase';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { supabase, loginWithGoogle, logout, getCurrentUser, onAuthStateChanged, getUserData, saveUserData, subscribeToUserData } from './supabase';
+import { User as SupabaseUser } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 import Markdown from 'react-markdown';
 
-const APP_VERSION = "V27.24 (STABLE)";
+const APP_VERSION = "V27.24 (Supabase Integration)";
 
 const THEME = {
   bg: "bg-background",
@@ -490,14 +489,19 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
       } catch { return { start: null, exercises: {} }; }
   });
 
-  // Auto-load from Firebase on startup
+  // Auto-load from Supabase on startup
   useEffect(() => {
-      const unsub = onSnapshot(doc(db, `users/${user.uid}/data/appData`), (docSnap) => {
-          if (docSnap.exists()) {
-              const loaded = docSnap.data() as AppData;
-              const merged = mergeWithFallback(loaded);
-              setData(merged);
-              localStorage.setItem('tm_data', JSON.stringify(merged));
+    const channel = subscribeToUserData(user.id, (newData) => {
+      if (newData) {
+        const merged = mergeWithFallback(newData as AppData);
+        setData(merged);
+        localStorage.setItem('tm_data', JSON.stringify(merged));
+        console.log("Auto-loaded data from Supabase");
+      }
+    });
+    return () => {
+      supabase.removeChannel(channel);
+    };
               console.log("Auto-loaded data from Firebase");
           }
       }, (err) => {
@@ -543,9 +547,9 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
       setData(newData); 
       localStorage.setItem('tm_data', JSON.stringify(newData)); 
       
-      // Auto-Sync to Firebase
-      setDoc(doc(db, `users/${user.uid}/data/appData`), newData).catch(err => {
-          console.error("Firebase save error:", err);
+      // Auto-Sync to Supabase
+      saveUserData(user.id, newData).catch(err => {
+          console.error("Supabase save error:", err);
       });
   };
   const updateSession = (newSession: ActiveSession) => { setActiveSession(newSession); localStorage.setItem('tm_session', JSON.stringify(newSession)); };
@@ -1697,7 +1701,7 @@ const App = () => {
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged((u) => {
       setUser(u);
       setAuthLoading(false);
     });
