@@ -1,61 +1,98 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Home, Zap, Trash2, Scale, History, BarChart3, Settings, X, Check, 
-  Calendar, Pill, Activity, User, Cpu, Trophy, Edit3, Save, Copy, Upload, FileJson, Play, Square, CheckSquare, Search
+  Calendar, Pill, Activity, User, Cpu, Trophy, Edit3, Save, Copy, Upload, FileJson, Play, Square, CheckSquare, Search, CloudUpload
 } from 'lucide-react';
 import { AppData, ExerciseDef, GitHubConfig, ActiveSession, MuscleGroup, WorkoutLog } from './types';
 import { FALLBACK_DATA, CAT_ORDER } from './constants';
 import { calculateProgression, calculateWarmup, generateSnapshotHTML } from './utils/logic';
 import { fetchFromGitHub, saveToGitHub } from './services/github';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart, CartesianGrid, LabelList, ComposedChart, Bar } from 'recharts';
+import { auth, db, loginWithGoogle, logout } from './firebase';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { GoogleGenAI } from '@google/genai';
+import Markdown from 'react-markdown';
 
 const APP_VERSION = "V27.24 (STABLE)";
 
 const THEME = {
-  bg: "bg-[#121212]",
-  card: "bg-[#1e1e1e]",
+  bg: "bg-background",
+  card: "bg-surface-container",
   cardBorder: "border border-white/5",
-  radius: "rounded-[2rem]",
-  btnPrimary: "bg-[#ffbc0d] text-black",
+  radius: "rounded-3xl",
+  btnPrimary: "bg-primary-container text-on-primary",
 };
 
 const DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
 // --- COMPONENTS ---
 
-const Header = ({ title, showBack, onBack, onSnapshot }: { title: string, showBack: boolean, onBack: () => void, onSnapshot: () => void }) => (
-  <div className="fixed top-0 left-0 w-full h-24 bg-[#121212]/95 backdrop-blur-md z-50 flex items-end justify-between px-6 pb-4 border-b border-white/5">
-    {showBack ? (
-      <button onClick={onBack} className="bg-[#2c2c2c] p-2 rounded-full active:scale-90 shadow-lg">
-        <div className="font-black text-[10px] text-white uppercase flex items-center gap-1">‹ Zurück</div>
-      </button>
-    ) : <div className="w-10" />}
-    <div className="text-center">
-        <div className="text-[10px] font-black uppercase tracking-widest mb-1 pulse-version-gold">PRO {APP_VERSION}</div>
-        <h1 className="text-xl font-black tracking-tighter text-white uppercase italic drop-shadow-md leading-none">{title}</h1>
-    </div>
-    <button onClick={onSnapshot} className="bg-[#2c2c2c] p-2 rounded-full active:scale-90 shadow-lg">
-      <span className="text-xl">💾</span>
-    </button>
-  </div>
-);
+const Header = ({ title, showBack, onBack, onSnapshot, view, userName, userPhoto }: { title: string, showBack: boolean, onBack: () => void, onSnapshot: () => void, view?: string, userName?: string, userPhoto?: string }) => {
+  if (view === 'home') {
+    return (
+      <header className="fixed top-0 w-full z-50 glass-header border-b border-white/5 px-6 py-4">
+        <div className="max-w-md mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <img alt="Profile" className="w-10 h-10 rounded-full object-cover border-2 border-primary-container" src={userPhoto || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&h=100&fit=crop"}/>
+              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full"></div>
+            </div>
+            <div>
+              <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Welcome back</p>
+              <h1 className="font-headline font-bold text-lg tracking-tight">{userName || 'Markus Kauderer'}</h1>
+            </div>
+          </div>
+          <button onClick={onSnapshot} className="relative p-2 text-on-surface-variant hover:text-white transition-colors">
+            <span className="material-symbols-outlined">notifications</span>
+            <span className="absolute top-2 right-2 w-2 h-2 bg-primary-container rounded-full"></span>
+          </button>
+        </div>
+      </header>
+    );
+  }
+
+  return (
+    <header className="fixed top-0 w-full z-50 glass-header border-b border-white/5 px-6 py-4">
+      <div className="max-w-md mx-auto flex justify-between items-center">
+        {showBack ? (
+          <button onClick={onBack} className="p-2 -ml-2 text-on-surface-variant hover:text-white transition-colors">
+            <span className="material-symbols-outlined">arrow_back</span>
+          </button>
+        ) : <div className="w-10" />}
+        <h1 className="font-headline font-bold text-lg tracking-tight">{title}</h1>
+        <button onClick={onSnapshot} className="p-2 -mr-2 text-primary-container hover:text-white transition-colors">
+          <span className="material-symbols-outlined">save</span>
+        </button>
+      </div>
+    </header>
+  );
+};
 
 const TabBar = ({ currentView, nav }: { currentView: string, nav: (id: string) => void }) => {
   const tabs = [
-    { id: 'home', icon: Home },
-    { id: 'plan', icon: Calendar },
-    { id: 'selection', icon: Zap },
-    { id: 'stats', icon: BarChart3 },
-    { id: 'profile', icon: User },
+    { id: 'home', icon: 'home', label: 'Home' },
+    { id: 'selection', icon: 'fitness_center', label: 'Workout' },
+    { id: 'stats', icon: 'analytics', label: 'Stats' },
+    { id: 'profile', icon: 'person', label: 'Profile' },
   ];
   return (
-    <div className="fixed bottom-6 left-4 right-4 h-[70px] bg-[#1e1e1e] rounded-[2rem] z-50 flex justify-around items-center border border-white/10 shadow-2xl">
-      {tabs.map(t => (
-        <button key={t.id} onClick={() => nav(t.id)} className={`p-2 rounded-full transition-all duration-300 ${currentView === t.id ? 'bg-[#ffbc0d] text-black scale-110' : 'opacity-40 text-white'}`}>
-          <t.icon size={22} strokeWidth={2.5} />
-        </button>
-      ))}
-    </div>
+    <nav className="fixed bottom-0 w-full z-50 glass-header border-t border-white/5 pb-safe">
+      <div className="max-w-md mx-auto px-6 py-3 flex justify-between items-center">
+        {tabs.map(t => {
+          const isActive = currentView === t.id;
+          return (
+            <button key={t.id} onClick={() => nav(t.id)} className={`flex flex-col items-center gap-1 p-2 group transition-colors ${isActive ? 'text-primary-container' : 'text-on-surface-variant hover:text-white'}`}>
+              <div className="relative">
+                <span className={`material-symbols-outlined text-2xl group-hover:scale-110 transition-transform ${isActive ? 'fill-1' : ''}`}>{t.icon}</span>
+                {isActive && <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 bg-primary-container rounded-full"></div>}
+              </div>
+              <span className={`font-label text-[9px] uppercase tracking-widest ${isActive ? 'font-bold' : ''}`}>{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 };
 
@@ -74,7 +111,7 @@ const TimerDisplay = ({ startTime }: { startTime: number | null }) => {
     }, [startTime]);
 
     return (
-        <div className="fixed top-24 right-4 bg-[#ffbc0d] text-black font-black font-mono px-4 py-2 rounded-full z-[40] shadow-lg pointer-events-none">
+        <div className="fixed top-24 right-4 bg-primary-container text-on-primary font-headline font-bold px-4 py-2 rounded-full z-[40] shadow-lg pointer-events-none">
             {timerStr}
         </div>
     );
@@ -85,7 +122,11 @@ const TimerDisplay = ({ startTime }: { startTime: number | null }) => {
 const BodyView = ({ data, saveData, showToast }: { data: AppData, saveData: (d: AppData) => void, showToast: (m: string) => void }) => {
     const [w, setW] = useState("");
     const [s, setS] = useState("");
-    const [dateInput, setDateInput] = useState(new Date().toISOString().split('T')[0]);
+    const [dateInput, setDateInput] = useState(() => {
+        const d = new Date();
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        return d.toISOString().split('T')[0];
+    });
     
     const add = () => { 
         if(!w && !s) return; 
@@ -130,62 +171,64 @@ const BodyView = ({ data, saveData, showToast }: { data: AppData, saveData: (d: 
     };
 
     return (
-      <div className="pt-28 pb-32 px-4 space-y-6 animate-fade-in">
-          <div className={`${THEME.card} p-6 rounded-3xl border border-white/5 shadow-2xl`}>
-              <h2 className="text-xl font-black text-white mb-6 uppercase tracking-tighter italic">Gewicht & Steps</h2>
-              
-              <div className="mb-4">
-                  <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block mb-2">Datum</label>
-                  <input type="date" value={dateInput} onChange={e=>setDateInput(e.target.value)} className="w-full bg-black/60 p-3 rounded-xl text-white font-bold border border-white/10 outline-none focus:border-[#ffbc0d]"/>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                  <div>
-                      <label className="text-[10px] text-[#3b82f6] font-black uppercase tracking-widest block mb-2">Gewicht (KG)</label>
-                      <input type="number" placeholder="00.0" value={w} onChange={e=>setW(e.target.value)} className="w-full bg-black/60 p-4 rounded-2xl text-2xl font-black text-[#3b82f6] outline-none border border-white/10 focus:border-[#3b82f6] shadow-inner"/>
+      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+          <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+              <div className="bg-surface-container p-6 rounded-3xl border border-white/5 shadow-2xl mb-6">
+                  <h2 className="text-xl font-headline font-black text-on-surface mb-6 uppercase tracking-tighter flex items-center gap-2"><span className="material-symbols-outlined text-primary-container text-[24px]">monitor_weight</span> Gewicht & Steps</h2>
+                  
+                  <div className="mb-4">
+                      <label className="text-[10px] text-on-surface-variant font-label uppercase tracking-widest block mb-2">Datum</label>
+                      <input type="date" value={dateInput} onChange={e=>setDateInput(e.target.value)} className="w-full bg-surface-container-highest p-3 rounded-xl text-on-surface font-bold border border-white/5 outline-none focus:border-primary-container transition-colors"/>
                   </div>
-                  <div>
-                      <label className="text-[10px] text-[#10b981] font-black uppercase tracking-widest block mb-2">Steps</label>
-                      <input type="number" placeholder="10k" value={s} onChange={e=>setS(e.target.value)} className="w-full bg-black/60 p-4 rounded-2xl text-2xl font-black text-[#10b981] outline-none border border-white/10 focus:border-[#10b981] shadow-inner"/>
+
+                  <div className="grid grid-cols-2 gap-4">
+                      <div>
+                          <label className="text-[10px] text-[#3b82f6] font-label font-black uppercase tracking-widest block mb-2">Gewicht (KG)</label>
+                          <input type="number" placeholder="00.0" value={w} onChange={e=>setW(e.target.value)} className="w-full bg-surface-container-highest p-4 rounded-2xl text-2xl font-headline font-black text-[#3b82f6] outline-none border border-white/5 focus:border-[#3b82f6] shadow-inner transition-colors"/>
+                      </div>
+                      <div>
+                          <label className="text-[10px] text-[#10b981] font-label font-black uppercase tracking-widest block mb-2">Steps</label>
+                          <input type="number" placeholder="10k" value={s} onChange={e=>setS(e.target.value)} className="w-full bg-surface-container-highest p-4 rounded-2xl text-2xl font-headline font-black text-[#10b981] outline-none border border-white/5 focus:border-[#10b981] shadow-inner transition-colors"/>
+                      </div>
                   </div>
+                  <button onClick={add} className="w-full mt-6 py-4 bg-primary-container text-on-primary rounded-2xl font-label font-bold shadow-[0_0_20px_rgba(234,179,8,0.2)] text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"><span className="material-symbols-outlined text-[18px]">save</span> Speichern</button>
               </div>
-              <button onClick={add} className="w-full mt-6 py-4 bg-white text-black rounded-2xl font-black shadow-xl text-lg border-b-4 border-zinc-300 uppercase tracking-tighter active:scale-95 transition-transform">Speichern</button>
-          </div>
 
-          {chartData.length > 1 && (
-              <div className="h-72 w-full bg-[#1e1e1e] rounded-[2rem] p-4 border border-white/5 shadow-2xl overflow-hidden">
-                  <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#333" />
-                          <XAxis dataKey="date" tick={{fontSize:10, fill:'#94a3b8'}} axisLine={false} tickLine={false} />
-                          <YAxis yAxisId="left" domain={['dataMin - 1', 'dataMax + 1']} tick={{fontSize:10, fill:'#3b82f6'}} axisLine={false} tickLine={false} width={40} />
-                          <YAxis yAxisId="right" orientation="right" tick={{fontSize:10, fill:'#10b981'}} axisLine={false} tickLine={false} width={40} />
-                          <Tooltip contentStyle={{backgroundColor:'#121212', borderRadius:'12px', border:'none', color:'#fff'}} itemStyle={{fontSize:'12px', fontWeight:'bold'}}/>
-                          <Bar yAxisId="right" dataKey="steps" fill="#10b981" barSize={8} radius={[4, 4, 0, 0]} fillOpacity={0.6} />
-                          <Line yAxisId="left" type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={1.5} dot={{r:2, fill:'#3b82f6', strokeWidth:1, stroke:'#fff'}} connectNulls={true} animationDuration={1000} />
-                      </ComposedChart>
-                  </ResponsiveContainer>
-              </div>
-          )}
+              {chartData.length > 1 && (
+                  <div className="h-72 w-full bg-surface-container rounded-3xl p-4 border border-white/5 shadow-2xl overflow-hidden mb-6">
+                      <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                              <XAxis dataKey="date" tick={{fontSize:10, fill:'#94a3b8', fontFamily: 'Inter'}} axisLine={false} tickLine={false} />
+                              <YAxis yAxisId="left" domain={['dataMin - 1', 'dataMax + 1']} tick={{fontSize:10, fill:'#3b82f6', fontFamily: 'Inter'}} axisLine={false} tickLine={false} width={40} />
+                              <YAxis yAxisId="right" orientation="right" tick={{fontSize:10, fill:'#10b981', fontFamily: 'Inter'}} axisLine={false} tickLine={false} width={40} />
+                              <Tooltip contentStyle={{backgroundColor:'#18181b', borderRadius:'16px', border:'1px solid rgba(255,255,255,0.1)', color:'#fff', fontFamily: 'Inter'}} itemStyle={{fontSize:'12px', fontWeight:'bold'}}/>
+                              <Bar yAxisId="right" dataKey="steps" fill="#10b981" barSize={8} radius={[4, 4, 0, 0]} fillOpacity={0.6} />
+                              <Line yAxisId="left" type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={2} dot={{r:3, fill:'#3b82f6', strokeWidth:2, stroke:'#18181b'}} connectNulls={true} animationDuration={1000} />
+                          </ComposedChart>
+                      </ResponsiveContainer>
+                  </div>
+              )}
 
-          <div className="space-y-3">
-               <h3 className="text-zinc-500 font-bold text-xs uppercase tracking-widest pl-2">Letzte 7 Tage</h3>
-               {last7.map(l => (
-                   <div key={l.d} className="bg-[#1e1e1e] border border-white/5 p-3 rounded-2xl flex items-center justify-between shadow-lg">
-                       <div className="text-xs font-bold text-zinc-400 w-16">{new Date(l.d).toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'})}</div>
-                       <div className="flex gap-2 flex-1 justify-end items-center">
-                           <div className="relative">
-                               <input type="number" value={l.w || ''} onChange={(e) => updateEntry(l.d, 'w', e.target.value)} className="w-16 bg-black/40 border border-[#3b82f6]/30 rounded-lg py-1.5 text-center text-sm font-black text-[#3b82f6] outline-none focus:border-[#3b82f6]" placeholder="kg" />
+              <div className="space-y-3">
+                   <h3 className="text-on-surface-variant font-label font-bold text-[10px] uppercase tracking-widest pl-2 mb-4">Letzte 7 Tage</h3>
+                   {last7.map(l => (
+                       <div key={l.d} className="bg-surface-container border border-white/5 p-4 rounded-2xl flex items-center justify-between shadow-lg">
+                           <div className="text-xs font-label font-bold text-on-surface-variant w-16">{new Date(l.d).toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'})}</div>
+                           <div className="flex gap-2 flex-1 justify-end items-center">
+                               <div className="relative">
+                                   <input type="number" value={l.w || ''} onChange={(e) => updateEntry(l.d, 'w', e.target.value)} className="w-16 bg-surface-container-highest border border-[#3b82f6]/30 rounded-xl py-2 text-center text-sm font-headline font-black text-[#3b82f6] outline-none focus:border-[#3b82f6] transition-colors" placeholder="kg" />
+                               </div>
+                               <div className="relative">
+                                   <input type="number" value={l.s || ''} onChange={(e) => updateEntry(l.d, 's', e.target.value)} className="w-16 bg-surface-container-highest border border-[#10b981]/30 rounded-xl py-2 text-center text-sm font-headline font-black text-[#10b981] outline-none focus:border-[#10b981] transition-colors" placeholder="steps" />
+                               </div>
+                               <button onClick={() => remove(l.d)} className="p-2 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error-container/20 flex items-center justify-center w-8 h-8"><span className="material-symbols-outlined text-[16px]">delete</span></button>
                            </div>
-                           <div className="relative">
-                               <input type="number" value={l.s || ''} onChange={(e) => updateEntry(l.d, 's', e.target.value)} className="w-16 bg-black/40 border border-[#10b981]/30 rounded-lg py-1.5 text-center text-sm font-black text-[#10b981] outline-none focus:border-[#10b981]" placeholder="steps" />
-                           </div>
-                           <button onClick={() => remove(l.d)} className="p-2 text-zinc-600 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
                        </div>
-                   </div>
-               ))}
-          </div>
-      </div>
+                   ))}
+              </div>
+          </section>
+      </main>
     );
 };
 
@@ -201,11 +244,53 @@ const TrainingView = ({
       const performFinish = () => { 
           try {
             const finalDur = new Date(Date.now() - (activeSession.start||Date.now())).toISOString().substr(11,8);
-            // Cleanup 'completed' flag before saving to history to keep data clean
+            
+            // Cleanup and sanitize data before saving to history
             const cleanExercises = JSON.parse(JSON.stringify(activeSession.exercises));
             Object.keys(cleanExercises).forEach(id => {
-                cleanExercises[id].sets.forEach((s: any) => delete s.completed);
+                cleanExercises[id].sets = cleanExercises[id].sets
+                    .map((s: any) => {
+                        delete s.completed;
+                        
+                        // Sanitize weight
+                        const w = Number(s.w);
+                        s.w = isNaN(w) ? 0 : w;
+                        
+                        // Sanitize reps
+                        const r = Number(s.r);
+                        s.r = isNaN(r) ? 0 : r;
+                        
+                        // Sanitize RPE
+                        if (s.rpe === undefined || s.rpe === null || s.rpe === "") {
+                            delete s.rpe;
+                        } else {
+                            const rpe = Number(s.rpe);
+                            if (isNaN(rpe)) {
+                                delete s.rpe;
+                            } else {
+                                s.rpe = rpe;
+                            }
+                        }
+                        
+                        return s;
+                    })
+                    // Filter out sets that are completely empty (0 weight and 0 reps)
+                    .filter((s: any) => s.w > 0 || s.r > 0);
+                
+                // Remove the exercise completely if no valid sets remain
+                if (cleanExercises[id].sets.length === 0) {
+                    delete cleanExercises[id];
+                }
             });
+
+            // If no exercises are left after cleanup, we might not want to save an empty workout
+            if (Object.keys(cleanExercises).length === 0) {
+                updateSession({ start: null, exercises: {} }); 
+                setConfirmMode(null);
+                nav('home'); 
+                showToast("Leeres Workout verworfen."); 
+                return;
+            }
 
             const newHistory = [{ d: activeSession.start || Date.now(), t: finalDur, note: note, s: cleanExercises }, ...data.h];
             saveData({ ...data, h: newHistory }); 
@@ -214,7 +299,7 @@ const TrainingView = ({
             setConfirmMode(null);
 
             setTimeout(() => {
-                nav('home'); 
+                nav('history'); 
                 showToast("Sehr gut! 💪"); 
             }, 50);
           } catch(err) {
@@ -236,19 +321,19 @@ const TrainingView = ({
             
             {/* Custom Confirmation Modal */}
             {confirmMode && (
-                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in" onClick={() => setConfirmMode(null)}>
-                    <div className="bg-[#1e1e1e] border border-white/10 p-6 rounded-[2rem] w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-xl font-black text-white mb-2 uppercase italic tracking-tighter">
+                <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in" onClick={() => setConfirmMode(null)}>
+                    <div className="bg-surface-container border border-white/10 p-6 rounded-[2rem] w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-xl font-headline font-black text-on-surface mb-2 uppercase italic tracking-tighter">
                             {confirmMode === 'save' ? 'Training beenden?' : 'Training abbrechen?'}
                         </h3>
-                        <p className="text-zinc-400 text-sm font-bold mb-6">
+                        <p className="text-on-surface-variant text-sm font-body mb-6">
                             {confirmMode === 'save' ? 'Die Einheit wird im Logbuch gespeichert.' : 'Alle Fortschritte dieser Einheit gehen verloren.'}
                         </p>
                         <div className="flex gap-3">
-                            <button onClick={() => setConfirmMode(null)} className="flex-1 py-4 bg-zinc-800 rounded-xl font-black text-xs uppercase text-zinc-400">Zurück</button>
+                            <button onClick={() => setConfirmMode(null)} className="flex-1 py-4 bg-surface-container-high rounded-xl font-label font-bold text-xs uppercase text-on-surface-variant">Zurück</button>
                             <button 
                                 onClick={confirmMode === 'save' ? performFinish : performAbort} 
-                                className={`flex-1 py-4 rounded-xl font-black text-xs uppercase text-black ${confirmMode === 'save' ? 'bg-[#10b981]' : 'bg-red-500'}`}
+                                className={`flex-1 py-4 rounded-xl font-label font-bold text-xs uppercase text-black ${confirmMode === 'save' ? 'bg-primary-container' : 'bg-red-500'}`}
                             >
                                 {confirmMode === 'save' ? 'Speichern' : 'Löschen'}
                             </button>
@@ -257,78 +342,101 @@ const TrainingView = ({
                 </div>
             )}
             
-            <div className="pt-28 pb-48 px-4 space-y-6">
+            <div className="pt-28 pb-48 px-6 space-y-6 max-w-md mx-auto">
+                <div className="mb-6">
+                    <h2 className="text-4xl font-headline font-black text-on-surface tracking-tighter leading-tight uppercase">Heutiges <br/><span className="text-primary-container">Training</span></h2>
+                    <p className="text-on-surface-variant font-label font-bold text-sm uppercase tracking-widest mt-2">Aktives Workout</p>
+                </div>
+
                 {sortedIds.map(id => {
                     const ex = data.db[id]; if(!ex) return null;
                     const sets = activeSession.exercises[id].sets;
                     const prog = calculateProgression(ex, data.h);
+                    
+                    // Count working sets
+                    const workingSetsCount = sets.filter((s:any) => s.type === 'A').length;
+                    
                     return (
-                        <div key={id} className={`${THEME.card} ${THEME.radius} p-5 border ${THEME.cardBorder}`}>
-                            <div className="flex justify-between items-start mb-4">
-                                    <h3 className="font-black text-white text-sm uppercase max-w-[70%]">{ex.n}</h3>
-                                    <div className="text-[10px] bg-zinc-800 px-2 py-1 rounded text-zinc-400 font-bold">H: {ex.h}</div>
+                        <div key={id} className="bg-surface-container rounded-3xl p-6 border border-white/5 shadow-2xl">
+                            <div className="mb-4">
+                                <h3 className="font-headline font-black text-on-surface text-xl uppercase tracking-tighter">{ex.n}</h3>
+                                <div className="text-on-surface-variant font-label font-bold text-xs uppercase tracking-widest mt-1">{workingSetsCount} SÄTZE • ZIEL: {prog.w}kg x {prog.r}</div>
                             </div>
-                            <div className="text-[10px] text-zinc-500 font-bold mb-4 uppercase tracking-widest">ZIEL: <span className="text-[#ffbc0d]">{prog.w}kg x {prog.r}</span></div>
+                            
                             <div className="space-y-3">
                                 {sets.map((s: any, idx) => (
-                                    <div key={idx} className={`flex items-center gap-2 p-2 rounded-xl border transition-all ${s.completed ? 'bg-green-900/20 border-green-500/30' : 'bg-black border-white/5'}`}>
-                                        {/* Checkbox */}
-                                        <button onClick={() => {
-                                            const ns = JSON.parse(JSON.stringify(activeSession));
-                                            ns.exercises[id].sets[idx].completed = !s.completed;
-                                            updateSession(ns);
-                                        }} className={`p-2 rounded-lg transition-colors ${s.completed ? 'text-[#10b981]' : 'text-zinc-600 hover:text-white'}`}>
-                                            {s.completed ? <CheckSquare size={24} /> : <Square size={24} />}
-                                        </button>
-
+                                    <div key={idx} className={`flex items-center gap-2 p-2 rounded-2xl border transition-all ${s.completed ? 'bg-primary-container/10 border-primary-container/30' : 'bg-background border-white/5'}`}>
                                         <button onClick={() => {
                                             const ns = JSON.parse(JSON.stringify(activeSession));
                                             ns.exercises[id].sets[idx].type = s.type === 'W' ? 'A' : 'W';
                                             updateSession(ns);
-                                        }} className={`w-8 h-8 rounded-full font-bold text-[10px] flex-shrink-0 ${s.type==='W'?'bg-zinc-700':'bg-[#ffbc0d] text-black'}`}>{s.type}</button>
+                                        }} className={`w-10 h-10 rounded-xl font-headline font-black text-xs flex items-center justify-center flex-shrink-0 ${s.type==='W'?'bg-surface-container-high text-on-surface-variant':'bg-primary-container text-on-primary'}`}>{s.type}</button>
                                         
-                                        <input type="number" value={s.w} onChange={e => {
-                                            const ns = JSON.parse(JSON.stringify(activeSession));
-                                            ns.exercises[id].sets[idx].w = parseFloat(e.target.value);
-                                            updateSession(ns);
-                                        }} className="w-14 bg-transparent text-center font-black text-lg text-white border-b border-zinc-800 outline-none" />
-                                        <span className="text-[9px] font-black text-zinc-600 uppercase">kg</span>
+                                        <div className="flex-1 flex items-center justify-center gap-1">
+                                            <input type="number" step={(ex.h && ex.h !== 0 && ex.h !== "0") ? "4.5" : "0.5"} value={s.w} onChange={e => {
+                                                const ns = JSON.parse(JSON.stringify(activeSession));
+                                                ns.exercises[id].sets[idx].w = parseFloat(e.target.value);
+                                                updateSession(ns);
+                                            }} className="w-20 bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0" />
+                                            <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">kg</span>
+                                        </div>
                                         
-                                        <input type="number" value={s.r} onChange={e => {
+                                        <div className="flex-1 flex items-center justify-center gap-1">
+                                            <input type="number" value={s.r} onChange={e => {
+                                                const ns = JSON.parse(JSON.stringify(activeSession));
+                                                ns.exercises[id].sets[idx].r = parseInt(e.target.value);
+                                                updateSession(ns);
+                                            }} className="w-12 bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0" />
+                                            <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">x</span>
+                                        </div>
+
+                                        <div className="flex-1 flex items-center justify-center gap-1">
+                                            <input type="number" step="0.5" value={s.rpe !== undefined ? s.rpe : ''} onChange={e => {
+                                                const ns = JSON.parse(JSON.stringify(activeSession));
+                                                ns.exercises[id].sets[idx].rpe = parseFloat(e.target.value);
+                                                updateSession(ns);
+                                            }} className="w-12 bg-transparent text-center font-headline font-black text-2xl text-primary-container outline-none border-none p-0 focus:ring-0" placeholder="-" />
+                                            <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">RIR</span>
+                                        </div>
+                                        
+                                        <button onClick={() => {
                                             const ns = JSON.parse(JSON.stringify(activeSession));
-                                            ns.exercises[id].sets[idx].r = parseInt(e.target.value);
+                                            ns.exercises[id].sets[idx].completed = !s.completed;
                                             updateSession(ns);
-                                        }} className="w-10 bg-transparent text-center font-black text-lg text-white border-b border-zinc-800 outline-none" />
-                                        <span className="text-[9px] font-black text-zinc-600 uppercase">x</span>
+                                        }} className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors flex-shrink-0 ${s.completed ? 'bg-primary-container text-on-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
+                                            <span className="material-symbols-outlined text-[24px]">check</span>
+                                        </button>
                                         
                                         <button onClick={() => {
                                             const ns = JSON.parse(JSON.stringify(activeSession));
                                             ns.exercises[id].sets.splice(idx,1);
                                             updateSession(ns);
-                                        }} className="ml-auto text-zinc-800 pl-1"><X size={14}/></button>
+                                        }} className="text-on-surface-variant hover:text-red-500 p-2 flex-shrink-0"><span className="material-symbols-outlined text-[16px]">close</span></button>
                                     </div>
                                 ))}
                                 <button onClick={() => {
                                     const ns = JSON.parse(JSON.stringify(activeSession));
-                                    ns.exercises[id].sets.push({w:0,r:10,type:'A',rpe:8, completed: false}); 
+                                    const lastSet = ns.exercises[id].sets.length > 0 ? ns.exercises[id].sets[ns.exercises[id].sets.length - 1] : null;
+                                    const newWeight = lastSet ? lastSet.w : prog.w;
+                                    ns.exercises[id].sets.push({w:newWeight,r:10,type:'A',rpe:8, completed: false}); 
                                     updateSession(ns);
-                                }} className="w-full py-2 bg-[#2c2c2c] rounded-lg text-[10px] font-bold text-zinc-500 uppercase">+ Satz hinzufügen</button>
+                                }} className="w-full py-3 bg-surface-container-high rounded-2xl text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest hover:bg-surface-container transition-colors">+ Satz hinzufügen</button>
                             </div>
                         </div>
                     );
                 })}
                 
-                <div className="space-y-4 pt-4">
-                    <button type="button" onClick={() => setConfirmMode('save')} className="relative z-10 w-full py-5 bg-[#10b981] text-black rounded-2xl font-black text-xl shadow-xl uppercase tracking-tighter flex items-center justify-center gap-2 active:scale-95 transition-transform cursor-pointer">
-                        <Check size={28} strokeWidth={3} /> Einheit Speichern
+                <div className="space-y-4 pt-6">
+                    <button type="button" onClick={() => setConfirmMode('save')} className="w-full py-5 bg-primary-container text-on-primary rounded-[2rem] font-headline font-black text-xl glow-primary uppercase tracking-tighter flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                        <span className="material-symbols-outlined text-[28px]">check_circle</span> Training Abschließen
                     </button>
 
-                    <div className={`${THEME.card} p-4 rounded-2xl relative z-0`}>
-                        <textarea placeholder="Notizen zur Einheit..." value={note} onChange={e=>setNote(e.target.value)} className="w-full bg-black/30 text-white text-sm p-3 rounded-xl border border-white/10 h-24" />
+                    <div className="bg-surface-container p-4 rounded-2xl border border-white/5">
+                        <textarea placeholder="Notizen zur Einheit..." value={note} onChange={e=>setNote(e.target.value)} className="w-full bg-background text-on-surface font-body text-sm p-4 rounded-xl border border-white/10 h-24 outline-none focus:border-primary-container" />
                     </div>
                     
-                    <button type="button" onClick={() => setConfirmMode('abort')} className="relative z-10 w-full py-4 bg-zinc-900 text-zinc-500 rounded-2xl font-black text-xs uppercase border border-white/5 hover:text-red-500 transition-colors cursor-pointer">
-                        Abbruch & Löschen
+                    <button type="button" onClick={() => setConfirmMode('abort')} className="w-full py-4 text-on-surface-variant font-label font-bold text-xs uppercase tracking-widest hover:text-red-500 transition-colors text-center">
+                        Training vorzeitig beenden
                     </button>
                 </div>
             </div>
@@ -338,9 +446,42 @@ const TrainingView = ({
 
 // --- MAIN APP ---
 
-const App = () => {
+const mergeWithFallback = (parsed: any): AppData => {
+    const localTimestamps = new Set(parsed.h?.map((l: any) => l.d) || []);
+    const missingFromHardcoded = FALLBACK_DATA.h.filter(l => !localTimestamps.has(l.d));
+    if (missingFromHardcoded.length > 0) {
+        parsed.h = [...missingFromHardcoded, ...(parsed.h || [])].sort((a: any, b: any) => b.d - a.d);
+    }
+    
+    if (parsed.bodyLogs) {
+        const localBodyTimestamps = new Set(parsed.bodyLogs.map((l: any) => l.d));
+        const missingBodyFromHardcoded = FALLBACK_DATA.bodyLogs.filter(l => !localBodyTimestamps.has(l.d));
+        if (missingBodyFromHardcoded.length > 0) {
+            parsed.bodyLogs = [...missingBodyFromHardcoded, ...parsed.bodyLogs].sort((a: any, b: any) => b.d - a.d);
+        }
+    } else {
+        parsed.bodyLogs = FALLBACK_DATA.bodyLogs;
+    }
+
+    if (!parsed.userSupps) parsed.userSupps = FALLBACK_DATA.userSupps;
+    if (!parsed.weekPlan) parsed.weekPlan = FALLBACK_DATA.weekPlan;
+    if (!parsed.timeLimits) parsed.timeLimits = FALLBACK_DATA.timeLimits;
+    if (!parsed.userProfile) parsed.userProfile = FALLBACK_DATA.userProfile;
+    if (!parsed.db) parsed.db = FALLBACK_DATA.db;
+    if (!parsed.userCalStatus) parsed.userCalStatus = FALLBACK_DATA.userCalStatus;
+    if (!parsed.goals) parsed.goals = FALLBACK_DATA.goals;
+    if (!parsed.calTargets) parsed.calTargets = FALLBACK_DATA.calTargets;
+    if (!parsed.dob) parsed.dob = FALLBACK_DATA.dob;
+    
+    return parsed;
+};
+
+const MainApp = ({ user }: { user: FirebaseUser }) => {
   const [data, setData] = useState<AppData>(FALLBACK_DATA);
   const [view, setView] = useState<string>('home');
+  const [userName, setUserName] = useState<string>(() => localStorage.getItem('tm_userName') || user.displayName || 'Markus Kauderer');
+  const [userPhoto, setUserPhoto] = useState<string>(() => localStorage.getItem('tm_userPhoto') || user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&h=100&fit=crop');
+  const [showExportModal, setShowExportModal] = useState(false);
   // Initialized from localStorage to prevent loss on reload
   const [activeSession, setActiveSession] = useState<ActiveSession>(() => {
       try { 
@@ -349,19 +490,22 @@ const App = () => {
       } catch { return { start: null, exercises: {} }; }
   });
 
-  const [ghConfig, setGhConfig] = useState<GitHubConfig>(() => {
-      const saved = localStorage.getItem('tm_gh_config');
-      const defaults = { token: '', owner: 'maxx4144136', repo: 'AIStudio-Trainingsapp', path: 'data.json' };
-      try { 
-          const parsed = saved ? JSON.parse(saved) : {};
-          return {
-              token: parsed.token || defaults.token,
-              owner: parsed.owner || defaults.owner,
-              repo: parsed.repo || defaults.repo,
-              path: parsed.path || defaults.path
-          };
-      } catch { return defaults; }
-  });
+  // Auto-load from Firebase on startup
+  useEffect(() => {
+      const unsub = onSnapshot(doc(db, `users/${user.uid}/data/appData`), (docSnap) => {
+          if (docSnap.exists()) {
+              const loaded = docSnap.data() as AppData;
+              const merged = mergeWithFallback(loaded);
+              setData(merged);
+              localStorage.setItem('tm_data', JSON.stringify(merged));
+              console.log("Auto-loaded data from Firebase");
+          }
+      }, (err) => {
+          console.error("Firebase sync error:", err);
+      });
+      return () => unsub();
+  }, [user.uid]);
+
   const [toast, setToast] = useState<string | null>(null);
   const [analyticsEx, setAnalyticsEx] = useState<string | null>(null);
   const [editTimestamp, setEditTimestamp] = useState<number | null>(null);
@@ -376,23 +520,15 @@ const App = () => {
 
   useEffect(() => {
     // Checkpoint log
-    console.log("V27.24 STABLE CHECKPOINT LOADED");
+    console.log("V27.25 STABLE CHECKPOINT LOADED");
     
     const localData = localStorage.getItem('tm_data');
     if (localData) {
       try {
         const parsed = JSON.parse(localData);
-        const localTimestamps = new Set(parsed.h.map((l: any) => l.d));
-        const missingFromHardcoded = FALLBACK_DATA.h.filter(l => !localTimestamps.has(l.d));
-        if (missingFromHardcoded.length > 0) {
-            parsed.h = [...missingFromHardcoded, ...parsed.h].sort((a: any, b: any) => b.d - a.d);
-            localStorage.setItem('tm_data', JSON.stringify(parsed));
-        }
-        if (!parsed.userSupps) parsed.userSupps = FALLBACK_DATA.userSupps;
-        if (!parsed.weekPlan) parsed.weekPlan = FALLBACK_DATA.weekPlan;
-        if (!parsed.timeLimits) parsed.timeLimits = FALLBACK_DATA.timeLimits;
-        
-        setData(parsed);
+        const merged = mergeWithFallback(parsed);
+        localStorage.setItem('tm_data', JSON.stringify(merged));
+        setData(merged);
       } catch(e) {
         console.error("Local Storage Error", e);
         setData(FALLBACK_DATA);
@@ -403,7 +539,15 @@ const App = () => {
   }, []);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
-  const saveData = (newData: AppData) => { setData(newData); localStorage.setItem('tm_data', JSON.stringify(newData)); };
+  const saveData = (newData: AppData) => { 
+      setData(newData); 
+      localStorage.setItem('tm_data', JSON.stringify(newData)); 
+      
+      // Auto-Sync to Firebase
+      setDoc(doc(db, `users/${user.uid}/data/appData`), newData).catch(err => {
+          console.error("Firebase save error:", err);
+      });
+  };
   const updateSession = (newSession: ActiveSession) => { setActiveSession(newSession); localStorage.setItem('tm_session', JSON.stringify(newSession)); };
 
   const executeDelete = () => {
@@ -427,81 +571,145 @@ const App = () => {
     return vol;
   };
 
+  const calculateExercisePriority = (exId: string) => {
+      const threeWeeksAgo = new Date();
+      threeWeeksAgo.setDate(threeWeeksAgo.getDate() - 21);
+      threeWeeksAgo.setHours(0,0,0,0);
+      
+      let totalSets = 0;
+      data.h.filter(w => w.d >= threeWeeksAgo.getTime()).forEach(w => {
+          if (w.s[exId]) {
+              totalSets += w.s[exId].sets.filter(s => s.type === 'A').length;
+          }
+      });
+      // Higher sets = lower priority number (so it appears first)
+      // If 0 sets, priority is 999
+      return totalSets > 0 ? 100 - totalSets : 999;
+  };
+
   /* --- VIEWS --- */
 
   const HomeView = () => {
     const vol = getWeeklyVolume();
-    const today = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long' });
-    const bw = data.bodyLogs.length > 0 ? data.bodyLogs[0].w : "--";
+    const today = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'short' });
+    const time = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
     
     return (
-      <div className="pt-28 pb-32 px-4 space-y-6 animate-fade-in">
-        <div className="flex justify-between items-end mb-4">
-            <div>
-                <div className="text-[#ffbc0d] font-black text-[10px] uppercase tracking-[0.3em] mb-1">Dashboard</div>
-                <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">{today}</h2>
+      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+        {/* HERO SECTION */}
+        <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+            <h2 className="font-headline font-black text-4xl tracking-tighter leading-[1.1] mb-2">
+                Ready to<br/>
+                <span className="text-primary-container relative inline-block">
+                    dominate?
+                    <span className="absolute -bottom-1 left-0 w-full h-1 bg-primary-container/30 rounded-full"></span>
+                </span>
+            </h2>
+            <p className="font-label text-xs text-on-surface-variant uppercase tracking-widest flex items-center gap-2">
+                <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+                {today} • {time}
+            </p>
+        </section>
+
+        {/* PRIMARY ACTION */}
+        <section className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
+            <button onClick={() => nav('selection')} className="w-full bg-primary-container text-on-primary py-5 rounded-3xl font-headline font-bold text-xl glow-primary hover:bg-[#e6a800] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 ease-in-out flex items-center justify-center gap-3 group relative overflow-hidden">
+                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"></div>
+                <span className="material-symbols-outlined fill-1 relative z-10">play_arrow</span>
+                <span className="relative z-10 tracking-tight">START WORKOUT</span>
+            </button>
+        </section>
+
+        {/* WEEKLY VOLUME BENTO GRID */}
+        <section className="space-y-4 animate-slide-up" style={{ animationDelay: '0.3s' }}>
+            <div className="flex justify-between items-end mb-2">
+                <h3 className="font-headline font-bold text-lg tracking-tight">Weekly Volume</h3>
+                <button onClick={() => nav('stats')} className="text-[10px] font-label uppercase tracking-widest text-primary-fixed-dim flex items-center gap-1 hover:text-white transition-colors group">
+                    Details <span className="material-symbols-outlined text-[12px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                </button>
             </div>
-            <div onClick={() => nav('body')} className="bg-[#1e1e1e] border border-white/5 rounded-2xl px-4 py-2 text-right">
-                <div className="text-[10px] text-zinc-500 font-bold uppercase">Gewicht & Steps</div>
-                <div className="text-lg font-black text-[#3b82f6]">{bw} kg</div>
-            </div>
-        </div>
-
-        <button onClick={() => nav('selection')} className="w-full py-6 bg-[#ffbc0d] text-black rounded-[2.5rem] font-black text-2xl shadow-lg shadow-[#ffbc0d]/20 active:scale-95 transition-transform flex items-center justify-center gap-3 border-b-4 border-[#e0a800]">
-            <Zap size={28} className="fill-black" /> WORKOUT STARTEN
-        </button>
-
-        <div className="grid grid-cols-2 gap-3">
-             <button onClick={() => nav('tennis')} className={`${THEME.card} p-4 rounded-3xl border border-white/5 flex flex-col items-center justify-center gap-2 active:scale-95`}>
-                <Activity size={24} className="text-[#10b981]" />
-                <span className="text-[10px] font-black uppercase">Tennis Log</span>
-             </button>
-             <button onClick={() => nav('supps')} className={`${THEME.card} p-4 rounded-3xl border border-white/5 flex flex-col items-center justify-center gap-2 active:scale-95`}>
-                <Pill size={24} className="text-[#a855f7]" />
-                <span className="text-[10px] font-black uppercase">Supplements</span>
-             </button>
-             
-             <button onClick={() => nav('stats')} className={`${THEME.card} p-4 rounded-3xl border border-white/5 flex flex-col items-center justify-center gap-2 active:scale-95`}>
-                <BarChart3 size={24} className="text-[#3b82f6]" />
-                <span className="text-[10px] font-black uppercase">Progress</span>
-             </button>
-
-             <button onClick={() => nav('history')} className={`${THEME.card} p-4 rounded-3xl border border-white/5 flex flex-col items-center justify-center gap-2 active:scale-95`}>
-                <History size={24} className="text-[#f97316]" />
-                <span className="text-[10px] font-black uppercase text-zinc-300">Logbuch</span>
-             </button>
-
-             <button onClick={() => nav('ai')} className={`${THEME.card} p-4 rounded-3xl border border-white/5 flex flex-col items-center justify-center gap-2 active:scale-95 col-span-2 bg-gradient-to-r from-indigo-900/40 to-purple-900/40`}>
-                <Cpu size={24} className="text-white" />
-                <span className="text-[10px] font-black uppercase text-white">KI Analyse Scope Generator</span>
-             </button>
-        </div>
-
-        <div className={`${THEME.card} p-6 rounded-[2.5rem] border border-white/5 shadow-2xl`}>
-            <div className="flex justify-between items-center mb-6">
-                <h3 className="text-white font-black text-sm uppercase italic">Wochenvolumen</h3>
-                <span className="text-[10px] bg-black/50 px-3 py-1 rounded-full text-zinc-500 font-black uppercase">Target: 20</span>
-            </div>
-            <div className="space-y-4">
-                {CAT_ORDER.map(cat => {
+            <div className="grid grid-cols-2 gap-3">
+                {CAT_ORDER.map((cat, index) => {
                     const current = vol[cat] || 0;
                     const goal = data.goals[cat as MuscleGroup] || 20;
                     const pct = Math.min(100, (current / goal) * 100);
-                    return (
-                        <div key={cat} className="space-y-2">
-                            <div className="flex justify-between items-end px-1">
-                                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">{cat}</span>
-                                <span className="text-[10px] font-black text-white italic">{current} / {goal}</span>
+                    const isFullWidth = index === CAT_ORDER.length - 1 && CAT_ORDER.length % 2 !== 0;
+
+                    if (isFullWidth) {
+                        return (
+                            <div key={cat} className="col-span-2 bg-surface-container p-4 rounded-3xl border border-white/5 relative overflow-hidden flex items-center justify-between group hover:border-white/10 transition-colors cursor-pointer">
+                                <div>
+                                    <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant mb-1">{cat}</p>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="font-headline font-black text-2xl tracking-tighter">{current}</span>
+                                        <span className="font-label text-xs text-on-surface-variant">/ {goal} sets</span>
+                                    </div>
+                                </div>
+                                <div className="w-1/2 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                                    <div className="h-full bg-primary-container rounded-full transition-all duration-1000 ease-out" style={{ width: `${pct}%` }}></div>
+                                </div>
                             </div>
-                            <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
-                                <div className={`h-full transition-all duration-1000 ease-out ${current >= goal ? 'bg-[#ffbc0d] shadow-[0_0_10px_#ffbc0d44]' : 'bg-zinc-700'}`} style={{ width: `${pct}%` }} />
+                        );
+                    }
+
+                    return (
+                        <div key={cat} className="bg-surface-container p-4 rounded-3xl border border-white/5 relative overflow-hidden group hover:border-white/10 transition-colors cursor-pointer">
+                            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <span className="material-symbols-outlined text-4xl">fitness_center</span>
+                            </div>
+                            <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant mb-1">{cat}</p>
+                            <div className="flex items-baseline gap-1 mb-3">
+                                <span className="font-headline font-black text-2xl tracking-tighter">{current}</span>
+                                <span className="font-label text-xs text-on-surface-variant">/ {goal} sets</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+                                <div className="h-full bg-primary-container rounded-full transition-all duration-1000 ease-out" style={{ width: `${pct}%` }}></div>
                             </div>
                         </div>
                     );
                 })}
             </div>
-        </div>
-      </div>
+        </section>
+
+        {/* PERFORMANCE INSIGHT */}
+        <section className="animate-slide-up" style={{ animationDelay: '0.4s' }}>
+            <div className="relative rounded-3xl overflow-hidden border border-white/10 p-6 min-h-[160px] flex flex-col justify-end group cursor-pointer">
+                <img alt="Training Background" className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-overlay transition-transform duration-700 group-hover:scale-105" src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=800&h=400&fit=crop"/>
+                <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/80 to-transparent"></div>
+                <div className="relative z-10">
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className="material-symbols-outlined text-primary-container text-sm">leaderboard</span>
+                        <span className="font-label text-[10px] uppercase tracking-widest text-primary-container font-bold">Insight</span>
+                    </div>
+                    <p className="font-body text-sm text-on-surface leading-relaxed font-medium">
+                        "Consistency is the ultimate separator. You're on a 4-day streak. Keep pushing."
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        {/* QUICK LINKS */}
+        <section className="animate-slide-up" style={{ animationDelay: '0.5s' }}>
+            <div className="grid grid-cols-2 gap-3">
+                 <button onClick={() => nav('tennis')} className="bg-surface-container p-4 rounded-3xl border border-white/5 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-high active:scale-95 transition-all group">
+                    <span className="material-symbols-outlined text-[#10b981] group-hover:scale-110 transition-transform">sports_tennis</span>
+                    <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant group-hover:text-white transition-colors">Tennis Log</span>
+                 </button>
+                 <button onClick={() => nav('supps')} className="bg-surface-container p-4 rounded-3xl border border-white/5 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-high active:scale-95 transition-all group">
+                    <span className="material-symbols-outlined text-[#a855f7] group-hover:scale-110 transition-transform">medication</span>
+                    <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant group-hover:text-white transition-colors">Supplements</span>
+                 </button>
+                 <button onClick={() => nav('history')} className="bg-surface-container p-4 rounded-3xl border border-white/5 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-high active:scale-95 transition-all group">
+                    <span className="material-symbols-outlined text-[#f97316] group-hover:scale-110 transition-transform">history</span>
+                    <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant group-hover:text-white transition-colors">Logbuch</span>
+                 </button>
+                 <button onClick={() => nav('ai')} className="bg-surface-container p-4 rounded-3xl border border-white/5 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-high active:scale-95 transition-all group">
+                    <span className="material-symbols-outlined text-[#3b82f6] group-hover:scale-110 transition-transform">smart_toy</span>
+                    <span className="font-label text-[10px] uppercase tracking-widest text-[#3b82f6] transition-colors">AI Coach</span>
+                 </button>
+            </div>
+        </section>
+      </main>
     );
   };
 
@@ -509,7 +717,7 @@ const App = () => {
       const toggleDay = (idx: number) => {
           const types = ["Push", "Pull", "Legs/Arms", "Rest"];
           const current = data.weekPlan[idx];
-          let next = types[0];
+          let next: string | null = types[0];
           if (current) {
               const i = types.indexOf(current);
               next = (i === -1 || i === types.length - 1) ? null : types[i+1];
@@ -540,7 +748,7 @@ const App = () => {
 
           const pool = (Object.values(data.db) as ExerciseDef[])
             .filter(ex => targetTypes.includes(ex.t))
-            .sort((a,b) => (a.prio || 99) - (b.prio || 99));
+            .sort((a,b) => calculateExercisePriority(a.id) - calculateExercisePriority(b.id));
           
           const selected = pool.slice(0, maxExercises);
           const newSession: ActiveSession = { start: null, exercises: {} };
@@ -555,36 +763,41 @@ const App = () => {
       };
 
       return (
-          <div className="pt-28 pb-32 px-4 space-y-6 animate-fade-in">
-              <div className={`${THEME.card} p-6 rounded-3xl border border-white/5`}>
-                  <h2 className="text-xl font-black text-white mb-6 uppercase italic tracking-tighter">Wochenplanung</h2>
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+              <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                  <div className="flex items-center gap-3 mb-6">
+                      <span className="material-symbols-outlined text-primary-container text-3xl">calendar_month</span>
+                      <h2 className="font-headline font-black text-2xl tracking-tighter">Wochenplanung</h2>
+                  </div>
+                  
                   <div className="grid grid-cols-1 gap-3">
                       {DAY_NAMES.map((day, i) => (
-                          <div key={i} className={`p-4 rounded-2xl border border-white/5 flex justify-between items-center ${data.weekPlan[i] ? 'bg-zinc-900' : 'bg-transparent opacity-50'}`}>
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="w-6 font-black text-zinc-500">{day}</div>
-                                    <button onClick={() => toggleDay(i)} className={`px-3 py-1 rounded-lg font-bold text-[10px] uppercase min-w-[80px] text-center transition-colors ${!data.weekPlan[i] ? 'bg-red-900/20 text-red-500' : 'bg-[#ffbc0d] text-black'}`}>
+                          <div key={i} className={`p-4 rounded-3xl border border-white/5 flex justify-between items-center transition-all ${data.weekPlan[i] ? 'bg-surface-container hover:border-white/10' : 'bg-transparent border-dashed opacity-60'}`}>
+                              <div className="flex flex-col gap-2">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 font-headline font-bold text-on-surface-variant">{day}</div>
+                                    <button onClick={() => toggleDay(i)} className={`px-4 py-1.5 rounded-full font-label text-[10px] uppercase tracking-widest min-w-[90px] text-center transition-colors ${!data.weekPlan[i] ? 'bg-error-container/20 text-error' : 'bg-primary-container text-on-primary'}`}>
                                         {data.weekPlan[i] || "REST"}
                                     </button>
                                 </div>
                                 {data.weekPlan[i] && (
-                                    <div className="flex items-center gap-2">
-                                        <input type="number" value={data.timeLimits[i]} onChange={(e) => updateTime(i, parseInt(e.target.value))} className="w-10 bg-black rounded text-center text-[10px] py-1 font-mono text-zinc-400 border border-white/10" />
-                                        <span className="text-[9px] text-zinc-600 font-black">MIN</span>
+                                    <div className="flex items-center gap-2 pl-11">
+                                        <span className="material-symbols-outlined text-[14px] text-on-surface-variant">timer</span>
+                                        <input type="number" value={data.timeLimits[i]} onChange={(e) => updateTime(i, parseInt(e.target.value))} className="w-12 bg-surface-container-highest rounded-lg text-center text-[12px] py-1 font-mono text-on-surface border-none focus:ring-1 focus:ring-primary-container" />
+                                        <span className="text-[10px] text-on-surface-variant font-label uppercase tracking-widest">MIN</span>
                                     </div>
                                 )}
                               </div>
                               {data.weekPlan[i] && (
-                                  <button onClick={() => startPlannedSession(i)} className="bg-[#2c2c2c] p-3 rounded-xl hover:bg-[#ffbc0d] hover:text-black transition-colors">
-                                      <Play size={18} fill="currentColor" />
+                                  <button onClick={() => startPlannedSession(i)} className="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center hover:bg-primary-container hover:text-on-primary transition-colors text-on-surface">
+                                      <span className="material-symbols-outlined fill-1">play_arrow</span>
                                   </button>
                               )}
                           </div>
                       ))}
                   </div>
-              </div>
-          </div>
+              </section>
+          </main>
       );
   };
 
@@ -601,22 +814,30 @@ const App = () => {
       }
 
       return (
-          <div className="pt-28 pb-32 px-4 space-y-6 animate-fade-in">
-              <div className={`${THEME.card} p-6 rounded-3xl border border-white/5`}>
-                  <h2 className="text-xl font-black text-white mb-6 uppercase italic tracking-tighter flex items-center gap-2"><Pill className="text-[#a855f7]"/> Supplemente</h2>
-                  <div className="space-y-2">
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+              <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                  <div className="flex items-center gap-3 mb-6">
+                      <span className="material-symbols-outlined text-[#a855f7] text-3xl">medication</span>
+                      <h2 className="font-headline font-black text-2xl tracking-tighter">Supplemente</h2>
+                  </div>
+                  <div className="space-y-3">
                       {data.userSupps.map((s, i) => (
-                          <div key={i} className="flex gap-2">
-                              <input value={s.n} onChange={e=>updateSupp(i,'n',e.target.value)} placeholder="Name" className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-sm font-bold text-white" />
-                              <input value={s.val} onChange={e=>updateSupp(i,'val',e.target.value)} placeholder="Menge" className="w-20 bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-sm font-bold text-[#a855f7] text-center" />
-                              <input value={s.unit} onChange={e=>updateSupp(i,'unit',e.target.value)} placeholder="Einheit" className="w-16 bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-sm font-bold text-zinc-500 text-center" />
-                              <button onClick={() => removeSupp(i)} className="text-zinc-600 hover:text-red-500 px-2"><X size={18}/></button>
+                          <div key={i} className="flex gap-2 items-center bg-surface-container p-3 rounded-2xl border border-white/5">
+                              <input value={s.n} onChange={e=>updateSupp(i,'n',e.target.value)} placeholder="Name" className="flex-1 bg-transparent border-none px-2 py-2 text-sm font-bold text-on-surface focus:ring-0" />
+                              <input value={s.val} onChange={e=>updateSupp(i,'val',e.target.value)} placeholder="Menge" className="w-16 bg-surface-container-highest border border-white/5 rounded-lg px-2 py-2 text-sm font-bold text-[#a855f7] text-center focus:ring-1 focus:ring-[#a855f7]" />
+                              <input value={s.unit} onChange={e=>updateSupp(i,'unit',e.target.value)} placeholder="Einh." className="w-16 bg-surface-container-highest border border-white/5 rounded-lg px-2 py-2 text-sm font-bold text-on-surface-variant text-center focus:ring-1 focus:ring-on-surface-variant" />
+                              <button onClick={() => removeSupp(i)} className="text-on-surface-variant hover:text-error p-2 transition-colors">
+                                  <span className="material-symbols-outlined text-[20px]">close</span>
+                              </button>
                           </div>
                       ))}
                   </div>
-                  <button onClick={addSupp} className="w-full mt-4 py-3 bg-[#2c2c2c] rounded-xl font-bold text-xs uppercase text-zinc-400">+ Eintrag</button>
-              </div>
-          </div>
+                  <button onClick={addSupp} className="w-full mt-4 py-4 bg-surface-container-highest rounded-2xl font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors flex items-center justify-center gap-2">
+                      <span className="material-symbols-outlined text-[18px]">add</span>
+                      Eintrag hinzufügen
+                  </button>
+              </section>
+          </main>
       );
   };
 
@@ -624,137 +845,278 @@ const App = () => {
       const [res, setRes] = useState("");
       const [dur, setDur] = useState("60");
       const [outcome, setOutcome] = useState("Sieg");
+      const [dateInput, setDateInput] = useState(() => {
+          const d = new Date();
+          d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+          return d.toISOString().split('T')[0];
+      });
       
       const saveMatch = () => {
+          const [year, month, day] = dateInput.split('-').map(Number);
+          const selectedDate = new Date(year, month - 1, day);
+          const now = new Date();
+          selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+          
           const log: any = {
-              d: Date.now(),
+              d: selectedDate.getTime(),
               t: new Date(parseInt(dur)*60000).toISOString().substr(11,8),
               note: `Tennis Match: ${res} (${outcome})`,
               s: { 'tennis_1': { sets: [{w: parseInt(dur), r: 1, type: 'A'}] } }
           };
           saveData({...data, h: [log, ...data.h]});
           showToast("Match gespeichert! 🎾");
-          nav('home');
+          nav('history');
       };
 
       return (
-          <div className="pt-28 pb-32 px-4 animate-fade-in">
-              <div className={`${THEME.card} p-6 rounded-3xl border border-white/5`}>
-                  <h2 className="text-xl font-black text-white mb-6 uppercase italic tracking-tighter flex items-center gap-2"><Activity className="text-[#10b981]"/> Tennis Log</h2>
-                  <div className="space-y-4">
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+              <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                  <div className="flex items-center gap-3 mb-6">
+                      <span className="material-symbols-outlined text-[#10b981] text-3xl">sports_tennis</span>
+                      <h2 className="font-headline font-black text-2xl tracking-tighter">Tennis Log</h2>
+                  </div>
+                  <div className="space-y-4 bg-surface-container p-6 rounded-3xl border border-white/5">
                       <div>
-                          <label className="text-[10px] text-zinc-500 font-bold uppercase">Ergebnis</label>
-                          <input value={res} onChange={e=>setRes(e.target.value)} placeholder="6:4, 6:2" className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white font-bold" />
+                          <label className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-2 block">Datum</label>
+                          <input type="date" value={dateInput} onChange={e=>setDateInput(e.target.value)} className="w-full bg-surface-container-highest border border-white/5 rounded-xl p-4 text-on-surface font-bold focus:ring-1 focus:ring-[#10b981]" />
+                      </div>
+                      <div>
+                          <label className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-2 block">Ergebnis</label>
+                          <input value={res} onChange={e=>setRes(e.target.value)} placeholder="6:4, 6:2" className="w-full bg-surface-container-highest border border-white/5 rounded-xl p-4 text-on-surface font-bold focus:ring-1 focus:ring-[#10b981]" />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                           <div>
-                              <label className="text-[10px] text-zinc-500 font-bold uppercase">Dauer (Min)</label>
-                              <input type="number" value={dur} onChange={e=>setDur(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white font-bold" />
+                              <label className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-2 block">Dauer (Min)</label>
+                              <input type="number" value={dur} onChange={e=>setDur(e.target.value)} className="w-full bg-surface-container-highest border border-white/5 rounded-xl p-4 text-on-surface font-bold focus:ring-1 focus:ring-[#10b981]" />
                           </div>
                           <div>
-                              <label className="text-[10px] text-zinc-500 font-bold uppercase">Ausgang</label>
-                              <select value={outcome} onChange={e=>setOutcome(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white font-bold">
+                              <label className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-2 block">Ausgang</label>
+                              <select value={outcome} onChange={e=>setOutcome(e.target.value)} className="w-full bg-surface-container-highest border border-white/5 rounded-xl p-4 text-on-surface font-bold focus:ring-1 focus:ring-[#10b981] appearance-none">
                                   <option>Sieg</option>
                                   <option>Niederlage</option>
                               </select>
                           </div>
                       </div>
-                      <button onClick={saveMatch} className="w-full py-4 bg-[#10b981] text-black font-black rounded-2xl mt-4 shadow-lg">MATCH SPEICHERN</button>
+                      <button onClick={saveMatch} className="w-full py-4 bg-[#10b981] text-black font-headline font-black rounded-2xl mt-4 shadow-lg hover:bg-[#0ea5e9] transition-colors flex items-center justify-center gap-2">
+                          <span className="material-symbols-outlined">save</span>
+                          MATCH SPEICHERN
+                      </button>
                   </div>
-              </div>
-          </div>
+              </section>
+          </main>
       );
   };
 
   const AIView = () => {
       const [startD, setStartD] = useState(() => { const d=new Date(); d.setDate(d.getDate()-14); return d.toISOString().split('T')[0]; });
       const [endD, setEndD] = useState(() => new Date().toISOString().split('T')[0]);
+      const [analysis, setAnalysis] = useState<string | null>(null);
+      const [loading, setLoading] = useState(false);
 
-      const copyScope = () => {
-          const sTs = new Date(startD).getTime();
-          const eTs = new Date(endD).setHours(23,59,59,999);
-          const relH = data.h.filter(l => l.d >= sTs && l.d <= eTs);
-          const relB = data.bodyLogs.filter(l => new Date(l.d).getTime() >= sTs && new Date(l.d).getTime() <= eTs);
-          const prompt = `*** MEDICAL ANALYTICAL SCOPE ***\nUser Profile: ${data.userProfile}\nStatus: ${data.userCalStatus}\nSupplements: ${JSON.stringify(data.userSupps)}\n\nTRAINING DATA (${startD} to ${endD}):\n${JSON.stringify(relH)}\n\nBODY DATA:\n${JSON.stringify(relB)}\n\nTASK: Analyze progression, volume load, and recovery indicators based on this dataset.`;
-          navigator.clipboard.writeText(prompt);
-          showToast("Daten in Zwischenablage! 📋");
-          setTimeout(() => window.open("https://gemini.google.com/app", "_blank"), 1500);
+      const analyzeData = async () => {
+          setLoading(true);
+          setAnalysis(null);
+          try {
+              const sTs = new Date(startD).getTime();
+              const eTs = new Date(endD).setHours(23,59,59,999);
+              const relH = data.h.filter(l => l.d >= sTs && l.d <= eTs);
+              const relB = data.bodyLogs.filter(l => new Date(l.d).getTime() >= sTs && new Date(l.d).getTime() <= eTs);
+              
+              const prompt = `Du bist ein professioneller Fitness-Coach. Analysiere die folgenden Trainings- und Körperdaten des Nutzers für den Zeitraum ${startD} bis ${endD}.
+              
+Nutzerprofil: ${data.userProfile}
+Ernährungsstatus: ${data.userCalStatus}
+Supplements: ${JSON.stringify(data.userSupps)}
+
+Trainingsdaten (Logbuch):
+${JSON.stringify(relH)}
+
+Körperdaten (Gewicht, etc.):
+${JSON.stringify(relB)}
+
+Aufgabe: 
+1. Analysiere den Trainingsfortschritt (Progression bei den Gewichten).
+2. Bewerte das Trainingsvolumen und die Konsistenz.
+3. Gib 2-3 konkrete, motivierende Tipps für die nächste Woche basierend auf den Zielen und dem Profil.
+Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die Formatierung.`;
+
+              const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+              const response = await ai.models.generateContent({
+                  model: 'gemini-3.1-pro-preview',
+                  contents: prompt,
+              });
+              
+              setAnalysis(response.text || "Keine Antwort generiert.");
+          } catch (error) {
+              console.error("AI Analysis failed:", error);
+              setAnalysis("Fehler bei der Analyse. Bitte versuche es später erneut.");
+          } finally {
+              setLoading(false);
+          }
       };
 
       return (
-          <div className="pt-28 pb-32 px-4 animate-fade-in">
-              <div className={`${THEME.card} p-6 rounded-3xl border border-white/5`}>
-                  <h2 className="text-xl font-black text-white mb-6 uppercase italic tracking-tighter flex items-center gap-2"><Cpu className="text-indigo-400"/> AI Scope</h2>
-                  <div className="space-y-4">
-                      <div><label className="text-xs font-bold text-zinc-500">Von</label><input type="date" value={startD} onChange={e=>setStartD(e.target.value)} className="w-full bg-black rounded-xl p-3 text-white border border-white/10"/></div>
-                      <div><label className="text-xs font-bold text-zinc-500">Bis</label><input type="date" value={endD} onChange={e=>setEndD(e.target.value)} className="w-full bg-black rounded-xl p-3 text-white border border-white/10"/></div>
-                      <button onClick={copyScope} className="w-full py-4 bg-indigo-600 text-white font-black rounded-2xl shadow-lg mt-4 flex items-center justify-center gap-2"><Copy size={18}/> DATEN KOPIEREN & ÖFFNEN</button>
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+              <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                  <div className="flex items-center gap-3 mb-6">
+                      <span className="material-symbols-outlined text-[#3b82f6] text-3xl">smart_toy</span>
+                      <h2 className="font-headline font-black text-2xl tracking-tighter">AI Coach</h2>
                   </div>
-              </div>
-          </div>
+                  <div className="bg-surface-container p-6 rounded-3xl border border-white/5 space-y-4">
+                      <p className="text-sm text-on-surface-variant mb-4">Wähle einen Zeitraum, um deine Trainings- und Körperdaten von Gemini analysieren zu lassen.</p>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-2 block">Von</label>
+                              <input type="date" value={startD} onChange={e=>setStartD(e.target.value)} className="w-full bg-surface-container-highest border border-white/5 rounded-xl p-3 text-on-surface text-sm focus:ring-1 focus:ring-[#3b82f6]" />
+                          </div>
+                          <div>
+                              <label className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-2 block">Bis</label>
+                              <input type="date" value={endD} onChange={e=>setEndD(e.target.value)} className="w-full bg-surface-container-highest border border-white/5 rounded-xl p-3 text-on-surface text-sm focus:ring-1 focus:ring-[#3b82f6]" />
+                          </div>
+                      </div>
+                      <button onClick={analyzeData} disabled={loading} className="w-full py-4 bg-[#3b82f6] text-white font-headline font-black rounded-2xl mt-4 shadow-lg hover:bg-[#2563eb] disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+                          {loading ? (
+                              <span className="material-symbols-outlined animate-spin">sync</span>
+                          ) : (
+                              <span className="material-symbols-outlined">auto_awesome</span>
+                          )}
+                          {loading ? "ANALYSISIERE..." : "DATEN ANALYSIEREN"}
+                      </button>
+                  </div>
+                  
+                  {analysis && (
+                      <div className="mt-8 bg-surface-container p-6 rounded-3xl border border-[#3b82f6]/30 shadow-[0_0_30px_rgba(59,130,246,0.1)] animate-fade-in">
+                          <h3 className="font-headline font-black text-xl text-[#3b82f6] mb-4 flex items-center gap-2">
+                              <span className="material-symbols-outlined">insights</span>
+                              Dein Feedback
+                          </h3>
+                          <div className="prose prose-invert prose-sm max-w-none text-on-surface-variant">
+                              <Markdown>{analysis}</Markdown>
+                          </div>
+                      </div>
+                  )}
+              </section>
+          </main>
       );
   };
 
-  const ProfileView = () => (
-      <div className="pt-28 pb-32 px-4 space-y-6 animate-fade-in">
-          <div className={`${THEME.card} p-6 rounded-3xl border border-white/5`}>
-              <h2 className="text-xl font-black text-white mb-6 uppercase italic tracking-tighter">Profil & Ziele</h2>
-              <div className="space-y-4">
-                  <div>
-                      <label className="text-[10px] text-zinc-500 font-bold uppercase">Kalorien Status</label>
-                      <div className="flex bg-black/40 rounded-xl p-1 border border-white/10 mt-1">
-                          {['cut', 'main', 'bulk'].map(s => (
-                              <button key={s} onClick={()=>saveData({...data, userCalStatus: s})} className={`flex-1 py-3 rounded-lg font-black text-xs uppercase ${data.userCalStatus===s ? 'bg-[#ffbc0d] text-black' : 'text-zinc-500'}`}>{s}</button>
-                          ))}
+  const ProfileView = () => {
+      const bw = data.bodyLogs.length > 0 ? data.bodyLogs[0].w : "--";
+      
+      const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+          const file = e.target.files?.[0];
+          if (file) {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                  const base64 = reader.result as string;
+                  setUserPhoto(base64);
+                  localStorage.setItem('tm_userPhoto', base64);
+              };
+              reader.readAsDataURL(file);
+          }
+      };
+
+      const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+          setUserName(e.target.value);
+          localStorage.setItem('tm_userName', e.target.value);
+      };
+
+      return (
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+              <section className="animate-slide-up flex flex-col items-center" style={{ animationDelay: '0.1s' }}>
+                  <label className="w-24 h-24 bg-surface-container rounded-full mb-4 border-2 border-primary-container flex items-center justify-center overflow-hidden shadow-[0_0_20px_rgba(255,188,13,0.15)] relative cursor-pointer group">
+                      {userPhoto ? (
+                          <img src={userPhoto} alt="Profile" className="w-full h-full object-cover" />
+                      ) : (
+                          <span className="material-symbols-outlined text-4xl text-on-surface-variant">person</span>
+                      )}
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="material-symbols-outlined text-white">photo_camera</span>
                       </div>
-                  </div>
-                  <div>
-                      <label className="text-[10px] text-zinc-500 font-bold uppercase">Biometrie & Ziele</label>
-                      <textarea value={data.userProfile} onChange={e=>saveData({...data, userProfile: e.target.value})} className="w-full h-32 bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-zinc-300 font-medium leading-relaxed" />
-                  </div>
-              </div>
-          </div>
-          <button onClick={()=>nav('settings')} className={`${THEME.card} w-full p-5 rounded-2xl flex justify-between items-center border border-white/5`}>
-              <span className="font-bold text-zinc-300">System Einstellungen</span>
-              <Settings className="text-zinc-500"/>
-          </button>
-          <button onClick={() => nav('ex-config')} className={`${THEME.card} w-full p-5 rounded-2xl flex justify-between items-center border border-white/5`}>
-              <span className="font-bold text-zinc-300">Übungen Konfigurieren</span>
-              <Edit3 className="text-zinc-500"/>
-          </button>
-      </div>
-  );
+                      <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+                  </label>
+                  <div className="bg-primary-container text-on-primary text-[10px] font-label font-bold px-3 py-1 rounded-full uppercase tracking-widest mb-2 shadow-lg">ELITE MEMBER</div>
+                  <input 
+                      type="text" 
+                      value={userName} 
+                      onChange={handleNameChange}
+                      className="font-headline font-black text-3xl tracking-tighter text-on-surface bg-transparent text-center outline-none border-b-2 border-transparent focus:border-primary-container transition-colors w-full"
+                      placeholder="Dein Name"
+                  />
+                  <p className="font-label text-on-surface-variant font-bold mt-1">{bw} kg</p>
+              </section>
+
+              <section className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
+                  <button onClick={() => nav('ai')} className="w-full py-5 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 border border-indigo-500/30 text-white rounded-3xl font-headline font-black text-sm shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-3">
+                      <span className="material-symbols-outlined text-indigo-400">smart_toy</span>
+                      KI Analyse Scope Generator
+                  </button>
+              </section>
+
+              <section className="space-y-3 animate-slide-up" style={{ animationDelay: '0.3s' }}>
+                  <button onClick={() => nav('settings')} className="w-full bg-surface-container p-5 rounded-3xl flex justify-between items-center border border-white/5 hover:bg-surface-container-high transition-colors group">
+                      <div className="flex items-center gap-4">
+                          <div className="bg-surface-container-highest p-3 rounded-xl text-on-surface-variant group-hover:text-primary-container transition-colors">
+                              <span className="material-symbols-outlined">settings</span>
+                          </div>
+                          <span className="font-headline font-bold text-on-surface">System Einstellungen</span>
+                      </div>
+                      <span className="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+                  </button>
+                  <button onClick={() => nav('ex-config')} className="w-full bg-surface-container p-5 rounded-3xl flex justify-between items-center border border-white/5 hover:bg-surface-container-high transition-colors group">
+                      <div className="flex items-center gap-4">
+                          <div className="bg-surface-container-highest p-3 rounded-xl text-on-surface-variant group-hover:text-primary-container transition-colors">
+                              <span className="material-symbols-outlined">edit_square</span>
+                          </div>
+                          <span className="font-headline font-bold text-on-surface">Übungen Konfigurieren</span>
+                      </div>
+                      <span className="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+                  </button>
+                  <button onClick={() => nav('body')} className="w-full bg-surface-container p-5 rounded-3xl flex justify-between items-center border border-white/5 hover:bg-surface-container-high transition-colors group">
+                      <div className="flex items-center gap-4">
+                          <div className="bg-surface-container-highest p-3 rounded-xl text-on-surface-variant group-hover:text-primary-container transition-colors">
+                              <span className="material-symbols-outlined">monitor_weight</span>
+                          </div>
+                          <span className="font-headline font-bold text-on-surface">Biometrie & Ziele</span>
+                      </div>
+                      <span className="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+                  </button>
+              </section>
+          </main>
+      );
+  };
 
   const ExerciseConfigView = () => (
-      <div className="pt-28 pb-32 px-4 animate-fade-in">
-          <div className={`${THEME.card} p-4 rounded-3xl border border-white/5`}>
-              <h2 className="text-xl font-black text-white mb-4 uppercase italic">Übungs-Config</h2>
-              <div className="space-y-2">
+      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+          <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+              <div className="flex items-center gap-3 mb-6">
+                  <span className="material-symbols-outlined text-primary-container text-3xl">edit_square</span>
+                  <h2 className="font-headline font-black text-2xl tracking-tighter">Übungs-Config</h2>
+              </div>
+              <div className="space-y-3">
                   {(Object.values(data.db) as ExerciseDef[]).map(ex => (
-                      <div key={ex.id} className="bg-black/40 p-4 rounded-xl border border-white/5">
-                          <div className="flex justify-between mb-2">
-                              <span className="font-bold text-white text-sm">{ex.n}</span>
-                              <span className="text-[10px] bg-zinc-800 px-2 py-1 rounded text-zinc-400">{ex.c}</span>
+                      <div key={ex.id} className="bg-surface-container p-4 rounded-3xl border border-white/5 flex flex-col gap-3">
+                          <div className="flex justify-between items-center">
+                              <span className="font-headline font-bold text-on-surface">{ex.n}</span>
+                              <span className="font-label text-[10px] bg-surface-container-highest px-2 py-1 rounded-md text-on-surface-variant uppercase tracking-widest">{ex.c}</span>
                           </div>
-                          <div className="flex gap-2">
-                              <label className="flex items-center gap-2 bg-black p-2 rounded-lg border border-white/10">
-                                  <span className="text-[10px] text-zinc-500 font-bold">H</span>
+                          <div className="flex gap-3">
+                              <label className="flex items-center gap-2 bg-surface-container-highest p-2 rounded-xl border border-white/5 flex-1 focus-within:ring-1 focus-within:ring-primary-container transition-shadow">
+                                  <span className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest pl-1">H</span>
                                   <input type="number" value={ex.h} onChange={(e) => {
                                       const nd = {...data}; nd.db[ex.id].h = e.target.value; saveData(nd);
-                                  }} className="w-8 bg-transparent text-white font-bold text-center text-sm outline-none"/>
+                                  }} className="w-full bg-transparent text-on-surface font-mono font-bold text-center text-sm outline-none border-none focus:ring-0 p-0"/>
                               </label>
-                              <label className="flex items-center gap-2 bg-black p-2 rounded-lg border border-white/10 flex-1">
-                                  <span className="text-[10px] text-zinc-500 font-bold">Prio</span>
-                                  <input type="number" value={ex.prio || 99} onChange={(e) => {
-                                      const nd = {...data}; nd.db[ex.id].prio = parseInt(e.target.value); saveData(nd);
-                                  }} className="w-full bg-transparent text-white font-bold text-center text-sm outline-none"/>
-                              </label>
+                              <div className="flex items-center justify-center gap-2 bg-surface-container-highest p-2 rounded-xl border border-white/5 flex-1">
+                                  <span className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest pl-1">Prio (Auto)</span>
+                                  <span className="w-full text-on-surface font-mono font-bold text-center text-sm">{calculateExercisePriority(ex.id) === 999 ? '-' : 100 - calculateExercisePriority(ex.id)} Sätze</span>
+                              </div>
                           </div>
                       </div>
                   ))}
               </div>
-          </div>
-      </div>
+          </section>
+      </main>
   );
 
   const AnalyticsView = () => {
@@ -776,9 +1138,10 @@ const App = () => {
           const last5Logs = [...logs].reverse().slice(0, 5); // Newest first
 
           return (
-              <div className="pt-28 pb-32 px-4 animate-fade-in">
-                  <h2 className="text-xl font-black text-[#ffbc0d] mb-6 uppercase tracking-tighter text-center italic">{data.db[analyticsEx]?.n}</h2>
-                  <div className="h-72 w-full bg-[#1e1e1e] rounded-[2rem] p-4 mb-8 border border-white/5 shadow-2xl">
+              <main className="flex-1 overflow-y-auto px-6 space-y-6 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+                  <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                      <h2 className="text-xl font-headline font-black text-primary-container mb-6 uppercase tracking-tighter text-center italic">{data.db[analyticsEx]?.n}</h2>
+                      <div className="h-72 w-full bg-surface-container rounded-[2rem] p-4 mb-8 border border-white/5 shadow-2xl">
                       <ResponsiveContainer width="100%" height="100%">
                           <AreaChart data={chartData} margin={{ top: 35, right: 10, left: 10, bottom: 0 }}>
                               <defs>
@@ -799,17 +1162,17 @@ const App = () => {
                   </div>
 
                   <div className="space-y-3 mb-8">
-                      <h3 className="text-zinc-500 font-bold text-xs uppercase tracking-widest pl-2">Letzte 5 Einheiten</h3>
+                      <h3 className="text-on-surface-variant font-bold text-xs uppercase tracking-widest pl-2">Letzte 5 Einheiten</h3>
                       {last5Logs.map(log => {
                            const sessionSets = log.s[analyticsEx].sets.filter(s => s.type === 'A');
                            return (
-                               <div key={log.d} className="bg-[#1e1e1e] border border-white/5 p-4 rounded-2xl flex justify-between items-center shadow-lg">
-                                   <div className="text-xs font-bold text-zinc-400">{new Date(log.d).toLocaleDateString()}</div>
+                               <div key={log.d} className="bg-surface-container border border-white/5 p-4 rounded-2xl flex justify-between items-center shadow-lg">
+                                   <div className="text-xs font-bold text-on-surface-variant">{new Date(log.d).toLocaleDateString()}</div>
                                    <div className="flex flex-col items-end gap-1">
                                       {sessionSets.map((s, i) => (
-                                          <div key={i} className="text-sm font-black text-white flex items-center gap-2">
+                                          <div key={i} className="text-sm font-black text-on-surface flex items-center gap-2">
                                               <span>{s.w}kg</span>
-                                              <span className="text-zinc-600 text-[10px]">x</span>
+                                              <span className="text-outline text-[10px]">x</span>
                                               <span>{s.r}</span>
                                           </div>
                                       ))}
@@ -819,59 +1182,124 @@ const App = () => {
                       })}
                   </div>
 
-                  <button onClick={()=>setAnalyticsEx(null)} className="w-full py-4 bg-[#2c2c2c] rounded-2xl font-black shadow-xl active:scale-95">ZURÜCK ZUR LISTE</button>
-              </div>
+                  <button onClick={()=>setAnalyticsEx(null)} className="w-full py-4 bg-surface-container-high rounded-2xl font-headline font-black shadow-xl active:scale-95 text-on-surface hover:bg-surface-container-highest transition-colors">ZURÜCK ZUR LISTE</button>
+                  </section>
+              </main>
           );
       }
+      
+      const vol = getWeeklyVolume();
+      const bw = data.bodyLogs.length > 0 ? data.bodyLogs[0].w : "--";
+      const steps = data.bodyLogs.length > 0 ? data.bodyLogs[0].s : "--";
+      
       return (
-          <div className="pt-28 pb-32 px-4 space-y-4 animate-fade-in">
-              {CAT_ORDER.map(cat => (
-                  <div key={cat} className={`${THEME.card} p-5 rounded-3xl border border-white/5`}>
-                      <h3 className="text-[#ffbc0d] text-[10px] font-black uppercase mb-3 tracking-widest">{cat}</h3>
-                      <div className="space-y-1">
-                          {(Object.values(data.db) as ExerciseDef[]).filter(ex=>ex.c===cat).map(ex => (
-                              <button key={ex.id} onClick={()=>setAnalyticsEx(ex.id)} className="w-full flex justify-between p-4 rounded-xl hover:bg-white/5 transition-all text-left">
-                                  <span className="text-sm font-bold text-zinc-300">{ex.n}</span>
-                                  <div className="bg-black/50 px-3 py-1 rounded-full border border-white/10 flex items-baseline gap-1">
-                                      <span className="text-[#ffbc0d] font-black text-xs">{freq[ex.id] || 0}</span>
-                                      <span className="text-[8px] text-zinc-600 font-black uppercase ml-1">Mal</span>
-                                  </div>
-                              </button>
-                          ))}
-                      </div>
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+              <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                  <div className="mb-6">
+                      <div className="text-primary-container font-label font-bold text-[10px] uppercase tracking-[0.3em] mb-1">Performance Center</div>
+                      <h2 className="text-4xl font-headline font-black text-on-surface tracking-tighter leading-tight">Fortschritt & <br/>Analyse</h2>
                   </div>
-              ))}
-          </div>
-      );
+
+              <div className="bg-gradient-to-r from-primary-container to-[#f59e0b] rounded-[2rem] p-6 text-on-primary-container shadow-lg shadow-primary-container/20">
+                  <div className="flex items-center gap-3 mb-2">
+                      <Zap size={24} className="fill-black" />
+                      <h3 className="font-black text-lg uppercase tracking-widest">Active Streak</h3>
+                  </div>
+                  <div className="text-4xl font-black tracking-tighter">24 DAYS</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                  <div className={`${THEME.card} p-5 rounded-[2rem] border border-white/5 shadow-2xl`}>
+                      <h3 className="text-on-surface-variant font-bold text-[10px] uppercase tracking-widest mb-1">Body Mass</h3>
+                      <div className="text-2xl font-black text-on-surface">{bw} <span className="text-sm text-on-surface-variant">kg</span></div>
+                  </div>
+                  <div className={`${THEME.card} p-5 rounded-[2rem] border border-white/5 shadow-2xl`}>
+                      <h3 className="text-on-surface-variant font-bold text-[10px] uppercase tracking-widest mb-1">Daily Steps</h3>
+                      <div className="text-2xl font-black text-on-surface">{steps}</div>
+                  </div>
+              </div>
+
+              <div className={`${THEME.card} p-6 rounded-[2rem] border border-white/5 shadow-2xl`}>
+                  <h3 className="text-on-surface font-black text-sm uppercase tracking-widest mb-6">Muscle Focus</h3>
+                  <div className="space-y-4">
+                      {CAT_ORDER.map(cat => {
+                          const current = vol[cat] || 0;
+                          const goal = data.goals[cat as MuscleGroup] || 20;
+                          const pct = Math.min(100, (current / goal) * 100);
+                          return (
+                              <div key={cat} className="space-y-2">
+                                  <div className="flex justify-between items-end px-1">
+                                      <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">{cat}</span>
+                                      <span className="text-xs font-black text-on-surface">{current} / {goal}</span>
+                                  </div>
+                                  <div className="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+                                      <div className={`h-full transition-all duration-1000 ease-out bg-primary-container`} style={{ width: `${pct}%` }} />
+                                  </div>
+                              </div>
+                          );
+                      })}
+                  </div>
+              </div>
+
+              <div className="bg-surface-container p-6 rounded-3xl border border-white/5">
+                  <h3 className="font-label text-on-surface font-bold text-sm uppercase tracking-widest mb-6">Exercise Details</h3>
+                  <div className="space-y-6">
+                      {CAT_ORDER.map(cat => (
+                          <div key={cat} className="mb-4">
+                              <h4 className="text-primary-container font-label text-[10px] font-bold uppercase mb-3 tracking-widest">{cat}</h4>
+                              <div className="space-y-2">
+                                  {(Object.values(data.db) as ExerciseDef[]).filter(ex=>ex.c===cat).map(ex => (
+                                      <button key={ex.id} onClick={()=>setAnalyticsEx(ex.id)} className="w-full flex justify-between items-center p-4 rounded-2xl hover:bg-surface-container-high transition-colors text-left bg-surface-container-highest border border-white/5 group">
+                                          <span className="font-headline font-bold text-sm text-on-surface group-hover:text-primary-container transition-colors">{ex.n}</span>
+                                          <div className="bg-surface-container px-3 py-1 rounded-lg border border-white/5 flex items-baseline gap-1">
+                                              <span className="text-primary-container font-mono font-black text-xs">{freq[ex.id] || 0}</span>
+                                          </div>
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </section>
+      </main>
+  );
   };
 
   const HistoryView = () => {
     const sortedHistory = useMemo(() => [...data.h].sort((a, b) => b.d - a.d), [data.h]);
     return (
-      <div className="pt-28 pb-32 px-4 space-y-4 animate-fade-in">
+      <main className="flex-1 overflow-y-auto px-6 space-y-4 pb-48 pt-28 max-w-md mx-auto" id="main-content">
           {sortedHistory.map((log, i) => (
-              <div key={log.d} className="bg-[#1e1e1e] p-5 rounded-3xl border-l-4 border-l-[#ffbc0d] relative shadow-lg">
+              <div key={log.d} className="bg-surface-container p-5 rounded-3xl border-l-4 border-l-primary-container relative shadow-lg animate-slide-up" style={{ animationDelay: `${i * 0.05}s` }}>
                   <div className="flex justify-between items-start mb-4">
                       <div>
-                          <div className="text-white font-black text-xl italic">{new Date(log.d).toLocaleDateString('de-DE')}</div>
-                          <div className="text-zinc-600 text-[10px] font-black uppercase tracking-[0.3em] font-mono">{log.t} DUR</div>
-                          {log.note && <div className="text-xs text-zinc-500 mt-1 italic">"{log.note}"</div>}
+                          <div className="text-on-surface font-headline font-black text-xl tracking-tighter">{new Date(log.d).toLocaleDateString('de-DE')} <span className="text-sm text-on-surface-variant font-normal">{new Date(log.d).toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit'})}</span></div>
+                          <div className="text-on-surface-variant font-label text-[10px] font-bold uppercase tracking-[0.3em] mt-1">{log.t} DUR</div>
+                          {log.note && <div className="text-xs text-on-surface-variant mt-2 italic border-l-2 border-white/10 pl-2">"{log.note}"</div>}
                       </div>
                       <div className="flex gap-2">
-                          <button onClick={()=> {setEditTimestamp(log.d); nav('history-edit');}} className="bg-zinc-800/50 text-zinc-300 hover:bg-[#ffbc0d] hover:text-black transition-all p-2 rounded-xl"><Edit3 size={18}/></button>
-                          <button onClick={(e)=> { e.stopPropagation(); setConfirmDeleteId(log.d); }} className="bg-zinc-800/50 text-zinc-300 hover:bg-red-900/30 hover:text-red-500 transition-all p-2 rounded-xl cursor-pointer relative z-10"><Trash2 size={18}/></button>
+                          <button onClick={()=> {setEditTimestamp(log.d); nav('history-edit');}} className="w-10 h-10 bg-surface-container-highest text-on-surface-variant hover:bg-primary-container hover:text-on-primary transition-colors rounded-full flex items-center justify-center">
+                              <span className="material-symbols-outlined text-[18px]">edit</span>
+                          </button>
+                          <button onClick={(e)=> { e.stopPropagation(); setConfirmDeleteId(log.d); }} className="w-10 h-10 bg-surface-container-highest text-on-surface-variant hover:bg-error-container hover:text-error transition-colors rounded-full flex items-center justify-center relative z-10">
+                              <span className="material-symbols-outlined text-[18px]">delete</span>
+                          </button>
                       </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                      {Object.keys(log.s).map(id=>(
-                        <span key={id} className="text-[10px] bg-black/60 px-3 py-1.5 rounded-xl text-zinc-400 font-black border border-white/5 shadow-inner">
-                            {data.db[id]?.n.substring(0, 24)}{data.db[id]?.n.length > 24 ? "..." : ""}
+                  <div className="flex flex-wrap gap-2 mt-4">
+                      {Object.keys(log.s).map(id=>{
+                        const name = data.db[id]?.n || id;
+                        return (
+                        <span key={id} className="font-label text-[10px] bg-surface-container-highest px-3 py-1.5 rounded-full text-on-surface-variant font-bold border border-white/5">
+                            {name.substring(0, 24)}{name.length > 24 ? "..." : ""}
                         </span>
-                      ))}
+                      )})}
                   </div>
               </div>
           ))}
-      </div>
+          <div className="h-24 w-full opacity-0 pointer-events-none"></div>
+      </main>
     );
   };
 
@@ -884,7 +1312,35 @@ const App = () => {
 
       const save = () => {
           const newData = {...data};
-          newData.h[logIdx] = localLog;
+          
+          // Sanitize localLog before saving
+          const cleanLog = JSON.parse(JSON.stringify(localLog));
+          Object.keys(cleanLog.s).forEach(id => {
+              cleanLog.s[id].sets = cleanLog.s[id].sets
+                  .map((s: any) => {
+                      const w = Number(s.w);
+                      s.w = isNaN(w) ? 0 : w;
+                      
+                      const r = Number(s.r);
+                      s.r = isNaN(r) ? 0 : r;
+                      
+                      if (s.rpe === undefined || s.rpe === null || s.rpe === "") {
+                          delete s.rpe;
+                      } else {
+                          const rpe = Number(s.rpe);
+                          if (isNaN(rpe)) delete s.rpe;
+                          else s.rpe = rpe;
+                      }
+                      return s;
+                  })
+                  .filter((s: any) => s.w > 0 || s.r > 0);
+                  
+              if (cleanLog.s[id].sets.length === 0) {
+                  delete cleanLog.s[id];
+              }
+          });
+          
+          newData.h[logIdx] = cleanLog;
           saveData(newData);
           setEditTimestamp(null);
           nav('history');
@@ -894,117 +1350,150 @@ const App = () => {
       const sortedIds = Object.keys(localLog.s).sort((a, b) => (localLog.s[a].order || 0) - (localLog.s[b].order || 0));
 
       return (
-          <div className="pt-28 pb-32 px-4 space-y-6 animate-fade-in">
-              <div className={`${THEME.card} p-6 rounded-3xl border border-white/5`}>
-                  <div className="flex justify-between items-center mb-4">
-                      <span className="text-zinc-500 font-bold text-xs uppercase">Datum</span>
-                      <span className="text-white font-black text-xl">{new Date(localLog.d).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center mb-4">
-                      <span className="text-zinc-500 font-bold text-xs uppercase">Dauer</span>
-                      <input value={localLog.t} onChange={e=>setLocalLog({...localLog, t:e.target.value})} className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-white font-mono font-bold text-center w-32"/>
-                  </div>
-                  <div>
-                      <span className="text-zinc-500 font-bold text-xs uppercase block mb-2">Notiz</span>
-                      <textarea value={localLog.note} onChange={e=>setLocalLog({...localLog, note:e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white h-20"/>
-                  </div>
-              </div>
-
-              {sortedIds.map(id => {
-                  const exDef = data.db[id];
-                  const exData = localLog.s[id];
-                  return (
-                      <div key={id} className={`${THEME.card} p-5 rounded-3xl border border-white/5`}>
-                          <h3 className="font-black text-white text-sm uppercase mb-4">{exDef?.n || id}</h3>
-                          <div className="space-y-2">
-                              {exData.sets.map((s, sIdx) => (
-                                  <div key={sIdx} className="flex items-center gap-2">
-                                      <div className="w-4 text-[10px] font-bold text-zinc-600">#{sIdx+1}</div>
-                                      
-                                      <input type="number" value={s.w} onChange={e=>{
-                                          const ns = {...localLog};
-                                          ns.s[id].sets[sIdx].w = parseFloat(e.target.value);
-                                          setLocalLog(ns);
-                                      }} className="w-14 bg-black/40 border-b border-white/10 text-white font-black text-center py-1 outline-none"/>
-                                      <span className="text-[8px] text-zinc-600">KG</span>
-                                      
-                                      <input type="number" value={s.r} onChange={e=>{
-                                          const ns = {...localLog};
-                                          ns.s[id].sets[sIdx].r = parseInt(e.target.value);
-                                          setLocalLog(ns);
-                                      }} className="w-10 bg-black/40 border-b border-white/10 text-white font-black text-center py-1 outline-none"/>
-                                      <span className="text-[8px] text-zinc-600">REPS</span>
-
-                                      <input type="number" value={s.rpe !== undefined ? s.rpe : ''} onChange={e=>{
-                                          const ns = {...localLog};
-                                          ns.s[id].sets[sIdx].rpe = parseFloat(e.target.value);
-                                          setLocalLog(ns);
-                                      }} className="w-10 bg-black/40 border-b border-white/10 text-[#ffbc0d] font-black text-center py-1 outline-none"/>
-                                      <span className="text-[8px] text-zinc-600">RIR</span>
-
-                                      <button onClick={()=>{
-                                          const ns = {...localLog};
-                                          ns.s[id].sets.splice(sIdx, 1);
-                                          setLocalLog(ns);
-                                      }} className="ml-auto text-zinc-700 hover:text-red-500 pl-2"><X size={16}/></button>
-                                  </div>
-                              ))}
-                              <button onClick={()=>{
-                                  const ns = {...localLog};
-                                  ns.s[id].sets.push({w:0, r:0, type:'A'});
-                                  setLocalLog(ns);
-                              }} className="w-full py-2 mt-2 bg-zinc-800/50 rounded-lg text-[10px] font-bold text-zinc-500 hover:text-white transition-colors uppercase">+ Satz</button>
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+              <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                  <div className="bg-surface-container p-6 rounded-3xl border border-white/5 mb-6">
+                      <div className="flex justify-between items-center mb-4">
+                          <span className="font-label text-on-surface-variant font-bold text-[10px] uppercase tracking-widest">Datum & Zeit</span>
+                          <div className="flex gap-2">
+                              <input 
+                                  type="date" 
+                                  value={new Date(localLog.d - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0]} 
+                                  onChange={e => {
+                                      if (!e.target.value) return;
+                                      const [year, month, day] = e.target.value.split('-').map(Number);
+                                      const newDate = new Date(localLog.d);
+                                      newDate.setFullYear(year, month - 1, day);
+                                      setLocalLog({...localLog, d: newDate.getTime()});
+                                  }} 
+                                  className="bg-surface-container-highest border border-white/5 rounded-xl px-3 py-2 text-on-surface font-mono font-bold text-center focus:outline-none focus:border-primary-container transition-colors w-36"
+                              />
+                              <input 
+                                  type="time" 
+                                  value={new Date(localLog.d - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[1].substring(0, 5)} 
+                                  onChange={e => {
+                                      if (!e.target.value) return;
+                                      const [hours, minutes] = e.target.value.split(':').map(Number);
+                                      const newDate = new Date(localLog.d);
+                                      newDate.setHours(hours, minutes);
+                                      setLocalLog({...localLog, d: newDate.getTime()});
+                                  }} 
+                                  className="bg-surface-container-highest border border-white/5 rounded-xl px-3 py-2 text-on-surface font-mono font-bold text-center focus:outline-none focus:border-primary-container transition-colors w-24"
+                              />
                           </div>
                       </div>
-                  );
-              })}
+                      <div className="flex justify-between items-center mb-4">
+                          <span className="font-label text-on-surface-variant font-bold text-[10px] uppercase tracking-widest">Dauer</span>
+                          <input value={localLog.t} onChange={e=>setLocalLog({...localLog, t:e.target.value})} className="bg-surface-container-highest border border-white/5 rounded-xl px-3 py-2 text-on-surface font-mono font-bold text-center w-32 focus:outline-none focus:border-primary-container transition-colors"/>
+                      </div>
+                      <div>
+                          <span className="font-label text-on-surface-variant font-bold text-[10px] uppercase tracking-widest block mb-2">Notiz</span>
+                          <textarea value={localLog.note} onChange={e=>setLocalLog({...localLog, note:e.target.value})} className="w-full bg-surface-container-highest border border-white/5 rounded-xl p-3 text-sm text-on-surface h-20 focus:outline-none focus:border-primary-container transition-colors resize-none"/>
+                      </div>
+                  </div>
 
-              <div className="flex gap-3">
-                  <button onClick={()=>nav('history')} className="flex-1 py-4 bg-zinc-800 rounded-2xl font-black text-xs uppercase text-zinc-400">Abbrechen</button>
-                  <button onClick={save} className="flex-[2] py-4 bg-[#ffbc0d] text-black rounded-2xl font-black text-sm uppercase shadow-lg">Speichern</button>
-              </div>
-          </div>
+                  {sortedIds.map(id => {
+                      const exDef = data.db[id];
+                      const exData = localLog.s[id];
+                      return (
+                          <div key={id} className="bg-surface-container p-5 rounded-3xl border border-white/5 mb-6">
+                              <h3 className="font-headline font-black text-on-surface text-sm uppercase mb-4">{exDef?.n || id}</h3>
+                              <div className="space-y-2">
+                                  {exData.sets.map((s, sIdx) => (
+                                      <div key={sIdx} className="flex items-center gap-2">
+                                          <div className="w-4 font-label text-[10px] font-bold text-on-surface-variant">#{sIdx+1}</div>
+                                          
+                                          <input type="number" step={(exDef?.h && exDef?.h !== 0 && exDef?.h !== "0") ? "4.5" : "0.5"} value={s.w} onChange={e=>{
+                                              const ns = {...localLog};
+                                              ns.s[id].sets[sIdx].w = parseFloat(e.target.value);
+                                              setLocalLog(ns);
+                                          }} className="w-14 px-0 bg-surface-container-highest border-0 border-b border-white/10 text-on-surface font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors"/>
+                                          <span className="text-[8px] text-on-surface-variant font-bold">KG</span>
+                                          
+                                          <input type="number" value={s.r} onChange={e=>{
+                                              const ns = {...localLog};
+                                              ns.s[id].sets[sIdx].r = parseInt(e.target.value);
+                                              setLocalLog(ns);
+                                          }} className="w-10 px-0 bg-surface-container-highest border-0 border-b border-white/10 text-on-surface font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors"/>
+                                          <span className="text-[8px] text-on-surface-variant font-bold">REPS</span>
+
+                                          <input type="number" step="0.5" value={s.rpe !== undefined ? s.rpe : ''} onChange={e=>{
+                                              const ns = {...localLog};
+                                              ns.s[id].sets[sIdx].rpe = parseFloat(e.target.value);
+                                              setLocalLog(ns);
+                                          }} className="w-10 px-0 bg-surface-container-highest border-0 border-b border-white/10 text-primary-container font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors" placeholder="-"/>
+                                          <span className="text-[8px] text-on-surface-variant font-bold">RIR</span>
+
+                                          <button onClick={()=>{
+                                              const ns = {...localLog};
+                                              ns.s[id].sets.splice(sIdx, 1);
+                                              setLocalLog(ns);
+                                          }} className="ml-auto text-on-surface-variant hover:text-error transition-colors pl-2">
+                                              <span className="material-symbols-outlined text-[16px]">close</span>
+                                          </button>
+                                      </div>
+                                  ))}
+                                  <button onClick={()=>{
+                                      const ns = {...localLog};
+                                      const lastSet = ns.s[id].sets.length > 0 ? ns.s[id].sets[ns.s[id].sets.length - 1] : null;
+                                      const newWeight = lastSet ? lastSet.w : 0;
+                                      ns.s[id].sets.push({w:newWeight, r:0, type:'A'});
+                                      setLocalLog(ns);
+                                  }} className="w-full py-2 mt-2 bg-surface-container-highest rounded-xl font-label text-[10px] font-bold text-on-surface-variant hover:text-on-surface transition-colors uppercase tracking-widest">+ Satz</button>
+                              </div>
+                          </div>
+                      );
+                  })}
+
+                  <div className="flex gap-3 mt-8">
+                      <button onClick={()=>nav('history')} className="flex-1 py-4 bg-surface-container-highest rounded-2xl font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant hover:text-on-surface transition-colors">Abbrechen</button>
+                      <button onClick={save} className="flex-[2] py-4 bg-primary-container text-on-primary rounded-2xl font-label font-bold text-sm uppercase tracking-widest shadow-[0_0_20px_rgba(234,179,8,0.2)] hover:scale-[1.02] active:scale-[0.98] transition-all">Speichern</button>
+                  </div>
+              </section>
+          </main>
       );
   };
 
   const SelectionView = () => (
-      <div className="pt-28 pb-40 px-4 space-y-6 animate-fade-in">
-        {CAT_ORDER.map(cat => (
-            <div key={cat} className={`${THEME.card} ${THEME.radius} p-5 border ${THEME.cardBorder}`}>
-                <h3 className="text-[#ffbc0d] font-black uppercase mb-4 pl-2 tracking-wider text-xs">{cat}</h3>
-                <div className="space-y-2">
-                    {(Object.values(data.db) as ExerciseDef[]).filter(ex => ex.c === cat).sort((a,b)=> (a.prio||99)-(b.prio||99)).map(ex => {
-                        const isSelected = !!activeSession.exercises[ex.id];
-                        return (
-                            <div key={ex.id} onClick={() => {
-                                const ns = { ...activeSession };
-                                if (ns.exercises[ex.id]) delete ns.exercises[ex.id];
-                                else ns.exercises[ex.id] = { sets: [], order: Object.keys(ns.exercises).length + 1 };
-                                updateSession(ns);
-                            }} className={`w-full flex justify-between items-center p-4 rounded-2xl border transition-all cursor-pointer ${isSelected ? 'bg-[#ffbc0d] text-black border-[#ffbc0d] scale-[1.02]' : 'bg-[#121212] text-zinc-400 border-white/5'}`}>
-                                <span className="font-bold text-sm text-left">{ex.n}</span>
-                                {isSelected ? (
-                                    <input 
-                                        type="number" 
-                                        onClick={(e) => e.stopPropagation()} 
-                                        onChange={(e) => {
-                                            const ns = { ...activeSession };
-                                            ns.exercises[ex.id].order = parseInt(e.target.value) || 0;
-                                            updateSession(ns);
-                                        }}
-                                        value={activeSession.exercises[ex.id].order} 
-                                        className="w-12 h-10 bg-white text-black font-black text-xl text-center rounded-xl shadow-inner focus:outline-none"
-                                    />
-                                ) : (
-                                    <div className="w-6 h-6 rounded-full border-2 border-zinc-600"></div>
-                                )}
-                            </div>
-                        );
-                    })}
+      <main className="flex-1 overflow-y-auto px-6 space-y-6 pb-40 pt-28 max-w-md mx-auto" id="main-content">
+        <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+            {CAT_ORDER.map(cat => (
+                <div key={cat} className="bg-surface-container p-5 rounded-3xl border border-white/5 mb-6">
+                    <h3 className="text-primary-container font-label font-bold uppercase mb-4 pl-2 tracking-widest text-[10px]">{cat}</h3>
+                    <div className="space-y-2">
+                        {(Object.values(data.db) as ExerciseDef[]).filter(ex => ex.c === cat).sort((a,b)=> calculateExercisePriority(a.id) - calculateExercisePriority(b.id)).map(ex => {
+                            const isSelected = !!activeSession.exercises[ex.id];
+                            return (
+                                <div key={ex.id} onClick={() => {
+                                    const ns = { ...activeSession };
+                                    if (ns.exercises[ex.id]) delete ns.exercises[ex.id];
+                                    else ns.exercises[ex.id] = { sets: [], order: Object.keys(ns.exercises).length + 1 };
+                                    updateSession(ns);
+                                }} className={`w-full flex justify-between items-center p-4 rounded-2xl border transition-all cursor-pointer ${isSelected ? 'bg-primary-container text-on-primary border-primary-container scale-[1.02] shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 'bg-surface-container-highest text-on-surface-variant border-white/5 hover:bg-surface-container-high'}`}>
+                                    <span className={`font-headline font-bold text-sm text-left ${isSelected ? 'text-on-primary' : 'text-on-surface'}`}>{ex.n}</span>
+                                    {isSelected ? (
+                                        <input 
+                                            type="number" 
+                                            onClick={(e) => e.stopPropagation()} 
+                                            onChange={(e) => {
+                                                const ns = { ...activeSession };
+                                                ns.exercises[ex.id].order = parseInt(e.target.value) || 0;
+                                                updateSession(ns);
+                                            }}
+                                            value={activeSession.exercises[ex.id].order} 
+                                            className="w-12 h-10 bg-white/20 text-on-primary font-mono font-black text-xl text-center rounded-xl focus:outline-none"
+                                        />
+                                    ) : (
+                                        <div className="w-6 h-6 rounded-full border-2 border-on-surface-variant/30"></div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
-            </div>
-        ))}
-        <div className="fixed bottom-24 left-4 right-4">
+            ))}
+        </section>
+        <div className="fixed bottom-24 left-0 right-0 p-4 flex justify-center z-40 pointer-events-none">
              <button onClick={() => {
                  if(Object.keys(activeSession.exercises).length>0){
                      const ns = { ...activeSession, start: activeSession.start || Date.now() };
@@ -1025,132 +1514,149 @@ const App = () => {
                          }
                      });
 
+                     ns.start = Date.now();
                      updateSession(ns);
                      nav('training');
                  }
-             }} className="w-full py-5 bg-[#ffbc0d] text-black rounded-2xl font-black text-xl shadow-xl border-b-4 border-[#e0a800]">
-                TRAINING STARTEN ({Object.keys(activeSession.exercises).length})
+             }} className={`pointer-events-auto px-8 py-4 rounded-full font-label font-bold text-sm uppercase tracking-widest shadow-[0_0_30px_rgba(234,179,8,0.3)] transition-transform duration-200 ease-in-out flex items-center gap-2 ${Object.keys(activeSession.exercises).length>0 ? 'bg-primary-container text-on-primary hover:scale-[1.02] active:scale-[0.98]' : 'bg-surface-container-highest text-on-surface-variant opacity-50 cursor-not-allowed'}`}>
+                 <span className="material-symbols-outlined text-[18px]">play_arrow</span>
+                 TRAINING STARTEN ({Object.keys(activeSession.exercises).length})
              </button>
         </div>
-      </div>
+      </main>
   );
 
   const SettingsView = () => {
-      const [localCfg, setLocalCfg] = useState<GitHubConfig>(() => {
-          const saved = localStorage.getItem('tm_gh_config');
-          const defaults = { token: '', owner: 'maxx4144136', repo: 'AIStudio-Trainingsapp', path: 'data.json' };
-          try { 
-              const parsed = saved ? JSON.parse(saved) : {};
-              return {
-                  token: parsed.token || defaults.token,
-                  owner: parsed.owner || defaults.owner,
-                  repo: parsed.repo || defaults.repo,
-                  path: parsed.path || defaults.path
-              };
-          } catch { return defaults; }
+      const [showAdmin, setShowAdmin] = useState(false);
+      const [adminCode, setAdminCode] = useState("");
+      const [exportDate, setExportDate] = useState(() => {
+          const d = new Date();
+          d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+          return d.toISOString().split('T')[0];
       });
-      
-      const saveConfig = () => {
-          setGhConfig(localCfg);
-          localStorage.setItem('tm_gh_config', JSON.stringify(localCfg));
-          showToast("Config gespeichert! ⚙️");
-      };
 
-      const load = async () => {
-          const loaded = await fetchFromGitHub(ghConfig);
-          if(loaded) {
-              saveData(loaded);
-              showToast("Daten geladen! 📥");
-          } else {
-              showToast("Fehler beim Laden ❌");
-          }
-      };
-
-      const push = async () => {
-          const success = await saveToGitHub(ghConfig, data);
-          if(success) showToast("Daten gespeichert! ☁️");
-          else showToast("Fehler beim Speichern ❌");
-      };
-
-      const verifySync = async () => {
-          const remote = await fetchFromGitHub(ghConfig);
-          if (!remote) {
-              showToast("Verbindung fehlgeschlagen ❌");
+      const exportTraining = () => {
+          const [year, month, day] = exportDate.split('-').map(Number);
+          const targetDate = new Date(year, month - 1, day).toLocaleDateString('de-DE');
+          const trainingsToExport = data.h.filter(log => new Date(log.d).toLocaleDateString('de-DE') === targetDate);
+          
+          if (trainingsToExport.length === 0) {
+              showToast("Kein Training an diesem Datum gefunden.");
               return;
           }
-
-          const localCount = data.h.length;
-          const remoteCount = remote.h.length;
-          // Sort to ensure we get the latest
-          const localLast = [...data.h].sort((a,b) => b.d - a.d)[0]?.d || 0;
-          const remoteLast = [...remote.h].sort((a,b) => b.d - a.d)[0]?.d || 0;
-
-          if (localCount === remoteCount && localLast === remoteLast) {
-              showToast("Daten sind synchron! ✅");
-          } else if (localLast > remoteLast) {
-              showToast(`Lokal ist neuer (${localCount} vs ${remoteCount}) ⚠️`);
-          } else {
-              showToast(`GitHub ist neuer (${remoteCount} vs ${localCount}) 📥`);
-          }
+          
+          const blob = new Blob([JSON.stringify(trainingsToExport, null, 2)], {type: "application/json"});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `training_${exportDate}.json`;
+          a.click();
       };
 
-      const reset = () => {
-          if(confirm("Alles zurücksetzen?")) {
-              saveData(FALLBACK_DATA);
-              showToast("Reset erfolgreich 🔄");
-          }
-      }
+      const importTraining = (e: React.ChangeEvent<HTMLInputElement>) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          
+          const reader = new FileReader();
+          reader.onload = (event) => {
+              try {
+                  const importedTrainings = JSON.parse(event.target?.result as string);
+                  if (Array.isArray(importedTrainings)) {
+                      const newData = {...data, h: [...importedTrainings, ...data.h]};
+                      newData.h.sort((a, b) => b.d - a.d);
+                      saveData(newData);
+                      showToast("Training(s) erfolgreich importiert! ✅");
+                  } else {
+                      showToast("Ungültiges Dateiformat.");
+                  }
+              } catch (err) {
+                  showToast("Fehler beim Importieren.");
+              }
+          };
+          reader.readAsText(file);
+      };
 
       return (
-          <div className="pt-28 pb-32 px-4 space-y-6 animate-fade-in">
-              <div className={`${THEME.card} p-6 rounded-3xl border border-white/5`}>
-                  <h2 className="text-xl font-black text-white mb-6 uppercase italic tracking-tighter flex items-center gap-2"><Settings className="text-zinc-500"/> System</h2>
-                  
-                  <div className="space-y-4 mb-6">
-                      <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest">GitHub Sync</h3>
-                      <input value={localCfg.token} onChange={e=>setLocalCfg({...localCfg, token: e.target.value})} placeholder="Token" type="password" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" />
-                      <input value={localCfg.owner} onChange={e=>setLocalCfg({...localCfg, owner: e.target.value})} placeholder="Owner (z.B. DeinUser)" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" />
-                      <input value={localCfg.repo} onChange={e=>setLocalCfg({...localCfg, repo: e.target.value})} placeholder="Repo (z.B. training-data)" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" />
-                      <input value={localCfg.path} onChange={e=>setLocalCfg({...localCfg, path: e.target.value})} placeholder="Path (data.json)" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" />
-                      <button onClick={saveConfig} className="w-full py-3 bg-zinc-800 rounded-xl font-bold text-xs uppercase text-zinc-300">Config Speichern</button>
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+              {showExportModal && (
+                  <div className="fixed inset-0 z-[110] flex items-center justify-center bg-background/80 backdrop-blur-md p-4 animate-fade-in" onClick={()=>setShowExportModal(false)}>
+                      <div className="bg-surface-container border border-white/5 p-6 rounded-3xl w-full max-w-sm shadow-2xl relative animate-slide-up" onClick={e=>e.stopPropagation()}>
+                         <h3 className="font-headline text-xl font-black text-on-surface mb-4 tracking-tighter flex items-center gap-2"><span className="material-symbols-outlined text-primary-container text-[24px]">sync_alt</span> Training Import / Export</h3>
+                         <p className="text-on-surface-variant font-body text-sm mb-6">Wähle ein Datum, um das Training dieses Tages zu exportieren, oder importiere ein zuvor exportiertes Training.</p>
+                         
+                         <div className="space-y-4 mb-8">
+                             <div>
+                                 <label className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-2 block">Datum für Export</label>
+                                 <input type="date" value={exportDate} onChange={e=>setExportDate(e.target.value)} className="w-full bg-surface-container-highest border border-white/5 rounded-xl p-3 text-on-surface text-sm focus:ring-1 focus:ring-primary-container mb-2" />
+                             </div>
+                             <div className="grid grid-cols-2 gap-3">
+                                 <button onClick={exportTraining} className="w-full py-3 bg-surface-container-highest text-on-surface hover:bg-surface-container-high transition-colors rounded-xl font-label font-bold uppercase text-[10px] tracking-widest flex items-center justify-center gap-2">
+                                     <span className="material-symbols-outlined text-[16px]">download</span> Export
+                                 </button>
+                                 <label className="w-full py-3 bg-surface-container-highest text-on-surface hover:bg-surface-container-high transition-colors rounded-xl font-label font-bold uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 cursor-pointer">
+                                     <span className="material-symbols-outlined text-[16px]">upload</span> Import
+                                     <input type="file" accept=".json" className="hidden" onChange={(e) => { importTraining(e); setShowExportModal(false); }} />
+                                 </label>
+                             </div>
+                         </div>
+                         
+                         <button onClick={() => setShowExportModal(false)} className="w-full py-4 bg-surface-container-highest rounded-2xl font-label font-bold text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-on-surface transition-colors">Schließen</button>
+                      </div>
                   </div>
+              )}
+              <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                  <div className="bg-surface-container p-6 rounded-3xl border border-white/5">
+                      <h2 className="font-headline font-black text-2xl text-on-surface mb-6 flex items-center gap-2"><span className="material-symbols-outlined text-primary-container text-[28px]">settings</span> System</h2>
+                      
+                       <div className="mt-6 pt-6 border-t border-white/5">
+                            <h3 className="font-label font-bold text-[10px] text-on-surface-variant uppercase tracking-widest mb-4">Backup</h3>
+                            <div className="grid grid-cols-1 gap-3">
+                                <button onClick={() => {
+                                    const html = generateSnapshotHTML(data);
+                                    const blob = new Blob([html], {type: "text/html"});
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement("a");
+                                    a.href = url;
+                                    a.download = `snapshot_${new Date().toISOString().split('T')[0]}.html`;
+                                    a.click();
+                                }} className="w-full py-3 bg-surface-container-highest text-on-surface hover:bg-surface-container-high transition-colors rounded-xl font-label font-bold uppercase text-[10px] tracking-widest flex items-center justify-center gap-2">
+                                    <span className="material-symbols-outlined text-[16px]">html</span> Download HTML Snapshot
+                                </button>
+                            </div>
+                       </div>
 
-                  <div className="grid grid-cols-2 gap-3 mb-3">
-                      <button onClick={load} className="py-4 bg-blue-900/30 text-blue-400 rounded-2xl font-black border border-blue-900/50 flex flex-col items-center gap-2">
-                          <span className="text-2xl">📥</span>
-                          <span className="text-[10px] uppercase">Laden</span>
-                      </button>
-                      <button onClick={push} className="py-4 bg-green-900/30 text-green-400 rounded-2xl font-black border border-green-900/50 flex flex-col items-center gap-2">
-                          <span className="text-2xl">☁️</span>
-                          <span className="text-[10px] uppercase">Speichern</span>
-                      </button>
+                       <div className="mt-6 pt-6 border-t border-white/5">
+                            <h3 className="font-label font-bold text-[10px] text-on-surface-variant uppercase tracking-widest mb-4">Account</h3>
+                            <button onClick={logout} className="w-full py-4 bg-error-container text-error hover:bg-error hover:text-on-error transition-colors rounded-2xl font-headline font-black shadow-xl active:scale-95 flex items-center justify-center gap-2">
+                                <span className="material-symbols-outlined text-[20px]">logout</span> Abmelden
+                            </button>
+                       </div>
+
+                       <div className="mt-6 pt-6 border-t border-white/5">
+                            <div className="flex justify-between items-center mb-4 cursor-pointer group" onClick={() => setShowAdmin(!showAdmin)}>
+                                <h3 className="font-label font-bold text-[10px] text-on-surface-variant group-hover:text-on-surface transition-colors uppercase tracking-widest">Internal</h3>
+                                <span className={`material-symbols-outlined text-on-surface-variant transition-transform duration-300 ${showAdmin ? 'rotate-180' : ''}`}>expand_more</span>
+                            </div>
+                            {showAdmin && (
+                                <div className="space-y-3 animate-slide-up">
+                                    <input 
+                                        type="password" 
+                                        value={adminCode} 
+                                        onChange={(e) => setAdminCode(e.target.value)} 
+                                        placeholder="Access Code" 
+                                        className="w-full bg-surface-container-highest border border-white/5 rounded-xl p-3 text-sm text-on-surface font-mono focus:outline-none focus:border-primary-container transition-colors"
+                                    />
+                                    {adminCode === "9096" && (
+                                        <a href="training-app.zip" download className="block w-full py-4 bg-primary-container text-on-primary rounded-xl font-label font-bold text-[10px] uppercase tracking-widest text-center shadow-[0_0_20px_rgba(234,179,8,0.2)] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+                                            <span className="material-symbols-outlined text-[16px]">inventory_2</span> DOWNLOAD APP ZIP
+                                        </a>
+                                    )}
+                                </div>
+                            )}
+                       </div>
                   </div>
-                  
-                  <button onClick={verifySync} className="w-full py-4 bg-zinc-800 text-zinc-300 rounded-2xl font-black border border-zinc-700 flex items-center justify-center gap-2">
-                      <Search size={18} />
-                      <span className="text-xs uppercase">Sync Prüfen</span>
-                  </button>
-
-                   <button onClick={reset} className="w-full mt-6 py-4 bg-red-900/20 text-red-500 rounded-2xl font-black text-xs uppercase border border-red-900/30">
-                      APP RESET (DANGER)
-                   </button>
-                   
-                   <div className="mt-6 pt-6 border-t border-white/5">
-                        <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-4">Export</h3>
-                        <button onClick={() => {
-                            const html = generateSnapshotHTML(data);
-                            const blob = new Blob([html], {type: "text/html"});
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = `snapshot_${new Date().toISOString().split('T')[0]}.html`;
-                            a.click();
-                        }} className="w-full py-3 bg-zinc-800 rounded-xl font-bold text-xs uppercase text-zinc-300">
-                            Download HTML Snapshot
-                        </button>
-                   </div>
-              </div>
-          </div>
+              </section>
+          </main>
       );
   };
 
@@ -1159,18 +1665,18 @@ const App = () => {
   const titleMap: Record<string, string> = { home:'DASHBOARD', plan:'PLANUNG', supps:'STACK', tennis:'COURT', profile:'PROFIL', ai:'INTELLIGENCE', 'ex-config':'CONFIG', selection:'AUSWAHL', training:'WORKOUT', stats:'ANALYSE', history:'LOGBUCH', 'history-edit':'EDIT LOG', body:'METRICS', settings:'SYSTEM' };
 
   return (
-    <div className={`min-h-screen ${THEME.bg} text-white font-sans selection:bg-[#ffbc0d]/20 overflow-x-hidden`}>
-      <Header title={titleMap[view] || 'APP'} showBack={view !== 'home'} onBack={() => nav('home')} onSnapshot={() => nav('settings')}/>
-      {toast && <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-[#ffbc0d] text-black font-black px-8 py-4 rounded-full z-[100] shadow-2xl animate-fade-in border-2 border-white">{toast}</div>}
+    <div className={`min-h-screen ${THEME.bg} text-on-background font-body selection:bg-primary-container/20 overflow-x-hidden`}>
+      <Header view={view} userName={userName} userPhoto={userPhoto} title={titleMap[view] || 'APP'} showBack={view !== 'home'} onBack={() => nav('home')} onSnapshot={() => view === 'settings' ? setShowExportModal(true) : nav('settings')}/>
+      {toast && <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-primary-container text-on-primary font-headline font-bold px-8 py-4 rounded-full z-[100] shadow-2xl animate-fade-in border-2 border-white">{toast}</div>}
       
       {confirmDeleteId !== null && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={()=>setConfirmDeleteId(null)}>
-              <div className="bg-[#1e1e1e] border border-white/10 p-6 rounded-3xl w-full max-w-sm shadow-2xl relative" onClick={e=>e.stopPropagation()}>
-                 <h3 className="text-xl font-black text-white mb-4 uppercase italic tracking-tighter">Warnung</h3>
-                 <p className="text-zinc-300 text-sm font-bold mb-8">Einheit wirklich löschen ?</p>
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-background/80 backdrop-blur-md p-4 animate-fade-in" onClick={()=>setConfirmDeleteId(null)}>
+              <div className="bg-surface-container border border-white/5 p-6 rounded-3xl w-full max-w-sm shadow-2xl relative animate-slide-up" onClick={e=>e.stopPropagation()}>
+                 <h3 className="font-headline text-xl font-black text-on-surface mb-4 tracking-tighter flex items-center gap-2"><span className="material-symbols-outlined text-error text-[24px]">warning</span> Warnung</h3>
+                 <p className="text-on-surface-variant font-body text-sm mb-8">Einheit wirklich löschen?</p>
                  <div className="flex gap-3">
-                    <button onClick={() => setConfirmDeleteId(null)} className="flex-1 py-4 bg-zinc-800 rounded-xl font-black text-xs uppercase text-zinc-400">Abbrechen</button>
-                    <button onClick={executeDelete} className="flex-1 py-4 bg-red-600 text-white rounded-xl font-black text-xs uppercase shadow-lg shadow-red-900/20">Löschen</button>
+                    <button onClick={() => setConfirmDeleteId(null)} className="flex-1 py-4 bg-surface-container-highest rounded-2xl font-label font-bold text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-on-surface transition-colors">Abbrechen</button>
+                    <button onClick={executeDelete} className="flex-1 py-4 bg-error-container text-error rounded-2xl font-label font-bold text-[10px] uppercase tracking-widest shadow-[0_0_20px_rgba(255,84,73,0.2)] hover:scale-[1.02] active:scale-[0.98] transition-all">Löschen</button>
                  </div>
               </div>
           </div>
@@ -1184,6 +1690,52 @@ const App = () => {
       <TabBar currentView={view} nav={nav} />
     </div>
   );
+};
+
+const App = () => {
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setAuthLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  if (authLoading) {
+    return (
+      <div className={`min-h-screen ${THEME.bg} flex items-center justify-center text-white`}>
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <span className="material-symbols-outlined text-4xl text-primary-container animate-spin">sync</span>
+          <span className="font-headline font-bold uppercase tracking-widest text-sm text-on-surface-variant">Lade Profil...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className={`min-h-screen ${THEME.bg} flex flex-col items-center justify-center p-6 text-center`}>
+        <div className="w-24 h-24 bg-surface-container rounded-full mb-8 border-2 border-primary-container flex items-center justify-center shadow-[0_0_30px_rgba(255,188,13,0.2)]">
+          <span className="material-symbols-outlined text-5xl text-primary-container">lock</span>
+        </div>
+        <h1 className="font-headline font-black text-4xl tracking-tighter text-on-surface mb-2">FITNESS MAXX</h1>
+        <p className="font-label text-sm text-on-surface-variant mb-12 max-w-xs">Bitte melde dich an, um auf deine persönlichen Trainingsdaten zuzugreifen.</p>
+        
+        <button 
+          onClick={loginWithGoogle}
+          className="w-full max-w-xs py-5 bg-white text-black rounded-3xl font-headline font-black text-lg shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-3"
+        >
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
+          Mit Google anmelden
+        </button>
+      </div>
+    );
+  }
+
+  return <MainApp user={user} />;
 };
 
 export default App;

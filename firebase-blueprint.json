@@ -1,0 +1,30 @@
+{
+  "entities": {
+    "AppData": {
+      "title": "AppData",
+      "description": "The main application data structure",
+      "type": "object",
+      "properties": {
+        "db": { "type": "object", "description": "Exercise Database" },
+        "h": { "type": "array", "description": "History" },
+        "bodyLogs": { "type": "array", "description": "Body Logs" },
+        "weekPlan": { "type": "array", "description": "7 days plan" },
+        "timeLimits": { "type": "array", "description": "7 days time limits" },
+        "userSupps": { "type": "array", "description": "User Supplements" },
+        "userProfile": { "type": "string", "description": "User Profile text" },
+        "userCalStatus": { "type": "string", "description": "User Calorie Status" },
+        "dob": { "type": "string", "description": "Date of Birth" },
+        "goals": { "type": "object", "description": "Custom weekly set goals" },
+        "calTargets": { "type": "object", "description": "Absolute Kcal values" },
+        "userName": { "type": "string", "description": "User Name" },
+        "userPhoto": { "type": "string", "description": "User Photo Base64" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}/data/appData": {
+      "schema": { "$ref": "#/entities/AppData" },
+      "description": "The user's application data"
+    }
+  }
+}

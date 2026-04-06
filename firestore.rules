@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields: (None directly, just a container for subcollections)
+    //
+    // Subcollection: data
+    // Document ID: appData
+    // Fields:
+    //   - db: object
+    //   - h: list
+    //   - bodyLogs: list
+    //   - weekPlan: list
+    //   - timeLimits: list
+    //   - userSupps: list
+    //   - userProfile: string
+    //   - userCalStatus: string
+    //   - dob: string
+    //   - goals: object
+    //   - calTargets: object
+    //   - userName: string
+    //   - userPhoto: string
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Match any document in the users collection
+    match /users/{userId} {
+      // Users can only read and write their own data
+      allow read, write: if isOwner(userId);
+      
+      match /data/{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}
