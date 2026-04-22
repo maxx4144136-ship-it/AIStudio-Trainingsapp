@@ -510,12 +510,6 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
     return () => {
       supabase.removeChannel(channel);
     };
-              console.log("Auto-loaded data from Firebase");
-          }
-      }, (err) => {
-          console.error("Firebase sync error:", err);
-      });
-      return () => unsub();
   }, [user.uid]);
 
   const [toast, setToast] = useState<string | null>(null);
