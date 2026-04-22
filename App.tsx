@@ -8,10 +8,18 @@ import { FALLBACK_DATA, CAT_ORDER } from './constants';
 import { calculateProgression, calculateWarmup, generateSnapshotHTML } from './utils/logic';
 import { fetchFromGitHub, saveToGitHub } from './services/github';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart, CartesianGrid, LabelList, ComposedChart, Bar } from 'recharts';
-import { supabase, loginWithGoogle, logout, getCurrentUser, onAuthStateChanged, getUserData, saveUserData, subscribeToUserData } from './supabase';
-import { User as SupabaseUser } from '@supabase/supabase-js';
+import { supabase, getCurrentUser, getUserData, saveUserData, subscribeToUserData } from './supabase';
+import { loginWithGoogle as firebaseLogin, logout as firebaseLogout, onAuthStateChanged } from './firebase';
 import { GoogleGenAI } from '@google/genai';
 import Markdown from 'react-markdown';
+
+// Firebase Auth User type (used by Firebase onAuthStateChanged)
+type FirebaseUser = {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+};
 
 const APP_VERSION = "V27.24 (Supabase Integration)";
 
@@ -1631,7 +1639,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
 
                        <div className="mt-6 pt-6 border-t border-white/5">
                             <h3 className="font-label font-bold text-[10px] text-on-surface-variant uppercase tracking-widest mb-4">Account</h3>
-                            <button onClick={logout} className="w-full py-4 bg-error-container text-error hover:bg-error hover:text-on-error transition-colors rounded-2xl font-headline font-black shadow-xl active:scale-95 flex items-center justify-center gap-2">
+                            <button onClick={firebaseLogout} className="w-full py-4 bg-error-container text-error hover:bg-error hover:text-on-error transition-colors rounded-2xl font-headline font-black shadow-xl active:scale-95 flex items-center justify-center gap-2">
                                 <span className="material-symbols-outlined text-[20px]">logout</span> Abmelden
                             </button>
                        </div>
@@ -1729,7 +1737,7 @@ const App = () => {
         <p className="font-label text-sm text-on-surface-variant mb-12 max-w-xs">Bitte melde dich an, um auf deine persönlichen Trainingsdaten zuzugreifen.</p>
         
         <button 
-          onClick={loginWithGoogle}
+          onClick={firebaseLogin}
           className="w-full max-w-xs py-5 bg-white text-black rounded-3xl font-headline font-black text-lg shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-3"
         >
           <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />

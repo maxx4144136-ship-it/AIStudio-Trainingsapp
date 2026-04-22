@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged as firebaseAuthListener } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import firebaseConfig from './firebase-applet-config.json';
 
@@ -25,3 +25,5 @@ export const logout = async () => {
     throw error;
   }
 };
+
+export { firebaseAuthListener as onAuthStateChanged };
