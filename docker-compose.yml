@@ -1,0 +1,10 @@
+services:
+  aistudio:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - /docker/ai-studio/dist:/app/dist:ro
+    command: sh -c "npm install -g serve && serve -s /app/dist -l 3001"
+    ports:
+      - "127.0.0.1:3001:3001"
+    restart: unless-stopped

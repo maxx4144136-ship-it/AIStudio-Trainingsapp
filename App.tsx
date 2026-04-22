@@ -9,7 +9,7 @@ import { calculateProgression, calculateWarmup, generateSnapshotHTML } from './u
 import { fetchFromGitHub, saveToGitHub } from './services/github';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart, CartesianGrid, LabelList, ComposedChart, Bar } from 'recharts';
 import { supabase, getCurrentUser, getUserData, saveUserData, subscribeToUserData } from './supabase';
-import { loginWithGoogle as firebaseLogin, logout as firebaseLogout, onAuthStateChanged } from './firebase';
+import { loginWithGoogle as firebaseLogin, logout as firebaseLogout, onAuthStateChanged, auth } from './firebase';
 import { GoogleGenAI } from '@google/genai';
 import Markdown from 'react-markdown';
 
@@ -1703,7 +1703,7 @@ const App = () => {
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged((u) => {
+    const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setAuthLoading(false);
     });
