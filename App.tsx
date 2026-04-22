@@ -499,7 +499,7 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
 
   // Auto-load from Supabase on startup
   useEffect(() => {
-    const channel = subscribeToUserData(user.id, (newData) => {
+    const channel = subscribeToUserData(user.uid, (newData) => {
       if (newData) {
         const merged = mergeWithFallback(newData as AppData);
         setData(merged);
