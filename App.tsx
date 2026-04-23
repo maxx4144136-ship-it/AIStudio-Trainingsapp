@@ -31,7 +31,7 @@ const DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const Header = ({ title, showBack, onBack, onSnapshot, view, userName, userPhoto }: { title: string, showBack: boolean, onBack: () => void, onSnapshot: () => void, view?: string, userName?: string, userPhoto?: string }) => {
   if (view === 'home') {
     return (
-      <header className="fixed top-0 w-full z-50 glass-header border-b border-white/5 px-6 py-4">
+      <header className="fixed top-0 w-full z-50 glass-header border-b border-white/5 px-6 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="max-w-md mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -53,7 +53,7 @@ const Header = ({ title, showBack, onBack, onSnapshot, view, userName, userPhoto
   }
 
   return (
-    <header className="fixed top-0 w-full z-50 glass-header border-b border-white/5 px-6 py-4">
+    <header className="fixed top-0 w-full z-50 glass-header border-b border-white/5 px-6 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <div className="max-w-md mx-auto flex justify-between items-center">
         {showBack ? (
           <button onClick={onBack} className="p-2 -ml-2 text-on-surface-variant hover:text-white transition-colors">
