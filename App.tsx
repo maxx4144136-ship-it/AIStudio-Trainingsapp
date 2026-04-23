@@ -117,78 +117,119 @@ const TimerDisplay = ({ startTime }: { startTime: number | null }) => {
     );
 };
 
-// --- EXTERNALIZED VIEWS ---
 
-const BodyView = ({ data, saveData, showToast }: { data: AppData, saveData: (d: AppData) => void, showToast: (m: string) => void }) => {
-    const [w, setW] = useState("");
-    const [s, setS] = useState("");
-    const [dateInput, setDateInput] = useState(() => {
-        const d = new Date();
-        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-        return d.toISOString().split('T')[0];
-    });
-    
-    const add = () => { 
-        if(!w && !s) return; 
-        const existing = data.bodyLogs.find(l => l.d === dateInput);
-        let newLogs;
-        if (existing) {
-             newLogs = data.bodyLogs.map(l => l.d === dateInput ? { ...l, w: w || l.w, s: s || l.s } : l);
-        } else {
-             newLogs = [{d: dateInput, w, s}, ...data.bodyLogs];
+const NumberStepper = ({ value, onChange, step, label, isDecimal, className, hideArrows = false }: any) => {
+    const [localStr, setLocalStr] = React.useState(value == null || isNaN(value) ? "" : String(value).replace('.', ','));
+
+    React.useEffect(() => {
+        const parsed = parseFloat(localStr.replace(',', '.'));
+        if (value !== parsed && !(isNaN(value) && isNaN(parsed))) {
+            setLocalStr(value == null || isNaN(value) ? "" : String(value).replace('.', ','));
         }
-        saveData({...data, bodyLogs: newLogs}); 
-        setW(""); setS(""); 
-        showToast("Daten gesichert! ✅"); 
+    }, [value]);
+
+    const handleChange = (e: any) => {
+        let v = e.target.value;
+        v = v.replace(/[^0-9.,]/g, '');
+        const commaCount = (v.match(/[.,]/g) || []).length;
+        if (commaCount > 1) return;
+        
+        setLocalStr(v);
+        const parsed = parseFloat(v.replace(',', '.'));
+        onChange(isNaN(parsed) ? 0 : parsed);
     };
 
-    const remove = (dateToDelete: string) => {
-        if(confirm("Eintrag wirklich löschen?")) {
-            const newLogs = data.bodyLogs.filter(l => l.d !== dateToDelete);
-            saveData({...data, bodyLogs: newLogs});
-            showToast("Gelöscht! 🗑️");
-        }
-    };
-
-    const chartData = useMemo(() => {
-        return [...data.bodyLogs]
-            .sort((a,b) => a.d.localeCompare(b.d))
-            .map(l => ({
-                date: l.d.substring(5), // MM-DD
-                weight: l.w ? parseFloat(l.w) : null,
-                steps: l.s ? parseFloat(l.s) : null
-            }))
-            .filter(d => d.weight !== null || d.steps !== null);
-    }, [data.bodyLogs]);
-
-    const last7 = useMemo(() => {
-        return [...data.bodyLogs].sort((a,b) => b.d.localeCompare(a.d)).slice(0, 7);
-    }, [data.bodyLogs]);
-
-    const updateEntry = (date: string, field: 'w'|'s', val: string) => {
-        const newLogs = data.bodyLogs.map(l => l.d === date ? { ...l, [field]: val } : l);
-        saveData({ ...data, bodyLogs: newLogs });
+    const applyStep = (dir: number) => {
+        let current = parseFloat(localStr.replace(',', '.')) || 0;
+        let next = current + (dir * step);
+        next = Math.round(next * 100) / 100;
+        if (next < 0 && label !== 'RIR') next = 0;
+        setLocalStr(String(next).replace('.', ','));
+        onChange(next);
     };
 
     return (
-      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6 pb-32 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
-          <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
-              <div className="bg-surface-container p-6 rounded-3xl border border-white/5 shadow-2xl mb-6">
-                  <h2 className="text-xl font-headline font-black text-on-surface mb-6 uppercase tracking-tighter flex items-center gap-2"><span className="material-symbols-outlined text-primary-container text-[24px]">monitor_weight</span> Gewicht & Steps</h2>
-                  
-                  <div className="mb-4">
-                      <label className="text-[10px] text-on-surface-variant font-label uppercase tracking-widest block mb-2">Datum</label>
-                      <input type="date" value={dateInput} onChange={e=>setDateInput(e.target.value)} className="w-full bg-surface-container-highest p-3 rounded-xl text-on-surface font-bold border border-white/5 outline-none focus:border-primary-container transition-colors"/>
-                  </div>
+        <div className={`flex flex-col items-center justify-center ${hideArrows ? 'pb-1' : ''}`}>
+            { !hideArrows && <button onClick={() => applyStep(1)} className="w-8 flex items-center justify-center text-on-surface-variant hover:text-[#3b82f6] active:scale-95 py-1 min-h-[24px]">
+                <span className="material-symbols-outlined text-[20px] leading-none">keyboard_arrow_up</span>
+            </button> }
+            <div className={`flex ${label && hideArrows ? 'flex-col' : 'items-baseline'} gap-1 ${!hideArrows ? 'my-[-4px]' : ''}`}>
+                <input 
+                    type="text" 
+                    inputMode={isDecimal ? "decimal" : "numeric"}
+                    value={localStr}
+                    onChange={handleChange}
+                    className={className || "w-16 bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0 leading-none h-8"} 
+                    placeholder="-"
+                />
+                {label && <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">{label}</span>}
+            </div>
+            { !hideArrows && <button onClick={() => applyStep(-1)} className="w-8 flex items-center justify-center text-on-surface-variant hover:text-[#3b82f6] active:scale-95 py-1 min-h-[24px]">
+                <span className="material-symbols-outlined text-[20px] leading-none">keyboard_arrow_down</span>
+            </button> }
+        </div>
+    );
+};
 
+
+const BodyView = ({ data, saveData, showToast }: { data: AppData, saveData: (d: AppData) => void, showToast: (m: string) => void }) => {
+    const [w, setW] = React.useState("");
+    const [s, setS] = React.useState("");
+    const [dateInput, setDateInput] = React.useState(() => {
+        const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().split('T')[0];
+    });
+
+    const add = () => {
+        if(!w && !s) return;
+        const newLogs = [...(data.bodyLogs || [])];
+        const exist = newLogs.find(l => l.d === dateInput);
+        if(exist) {
+            exist.w = w || exist.w;
+            exist.s = s || exist.s;
+        } else {
+            newLogs.unshift({d: dateInput, w, s});
+        }
+        setW(""); setS("");
+        saveData({...data, bodyLogs: newLogs.sort((a,b)=>b.d.localeCompare(a.d))});
+        showToast("Gespeichert! 💾");
+    };
+    
+    const remove = (d: string) => {
+        saveData({...data, bodyLogs: data.bodyLogs.filter(l => l.d !== d)});
+        showToast("Gelöscht 🗑️");
+    };
+    
+    const updateEntry = (d: string, field: 'w'|'s', val: string) => {
+         const newLogs = [...data.bodyLogs];
+         const exist = newLogs.find(l => l.d === d);
+         if(exist) exist[field] = val;
+         saveData({...data, bodyLogs: newLogs});
+    };
+
+    const last7 = (data.bodyLogs || []).slice(0, 7);
+    const chartData = last7.map(l => ({ name: new Date(l.d).toLocaleDateString('de-DE', {weekday:'short'}), Weight: l.w ? parseFloat(l.w.replace(',','.')) : null })).reverse();
+
+    return (
+        <main className="pb-24 pt-6 px-4 animate-fade-in relative max-w-lg mx-auto">
+            <h2 className="font-headline font-black text-3xl mb-8 tracking-tight text-on-surface">Gewicht & Activity</h2>
+            
+            <section className="animate-slide-up" style={{animationDelay: '0.1s'}}>
+                <div className="bg-surface-container border border-white/5 p-6 rounded-3xl shadow-2xl relative mb-6">
+                  <div className="flex items-center gap-2 mb-6">
+                      <span className="material-symbols-outlined text-[#3b82f6]">monitor_weight</span>
+                      <h3 className="font-headline font-bold text-lg text-on-surface">Eintrag hinzufügen</h3>
+                  </div>
+                  <div className="mb-4">
+                      <input type="date" value={dateInput} onChange={e=>setDateInput(e.target.value)} className="w-full bg-surface-container-highest p-4 rounded-2xl text-on-surface font-label font-bold outline-none border border-white/5 focus:border-[#3b82f6] transition-colors"/>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                       <div>
                           <label className="text-[10px] text-[#3b82f6] font-label font-black uppercase tracking-widest block mb-2">Gewicht (KG)</label>
-                          <input type="number" placeholder="00.0" value={w} onChange={e=>setW(e.target.value)} className="w-full bg-surface-container-highest p-4 rounded-2xl text-2xl font-headline font-black text-[#3b82f6] outline-none border border-white/5 focus:border-[#3b82f6] shadow-inner transition-colors"/>
+                          <input type="text" inputMode="decimal" placeholder="00.0" value={w} onChange={e=>setW(e.target.value.replace(/[^0-9.,]/g, ''))} className="w-full bg-surface-container-highest p-4 rounded-2xl text-2xl font-headline font-black text-[#3b82f6] outline-none border border-white/5 focus:border-[#3b82f6] shadow-inner transition-colors"/>
                       </div>
                       <div>
                           <label className="text-[10px] text-[#10b981] font-label font-black uppercase tracking-widest block mb-2">Steps</label>
-                          <input type="number" placeholder="10k" value={s} onChange={e=>setS(e.target.value)} className="w-full bg-surface-container-highest p-4 rounded-2xl text-2xl font-headline font-black text-[#10b981] outline-none border border-white/5 focus:border-[#10b981] shadow-inner transition-colors"/>
+                          <input type="text" inputMode="decimal" placeholder="10k" value={s} onChange={e=>setS(e.target.value.replace(/[^0-9.,]/g, ''))} className="w-full bg-surface-container-highest p-4 rounded-2xl text-2xl font-headline font-black text-[#10b981] outline-none border border-white/5 focus:border-[#10b981] shadow-inner transition-colors"/>
                       </div>
                   </div>
                   <button onClick={add} className="w-full mt-6 py-4 bg-primary-container text-on-primary rounded-2xl font-label font-bold shadow-[0_0_20px_rgba(234,179,8,0.2)] text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"><span className="material-symbols-outlined text-[18px]">save</span> Speichern</button>
@@ -199,28 +240,24 @@ const BodyView = ({ data, saveData, showToast }: { data: AppData, saveData: (d: 
                       <ResponsiveContainer width="100%" height="100%">
                           <ComposedChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                              <XAxis dataKey="date" tick={{fontSize:10, fill:'#94a3b8', fontFamily: 'Inter'}} axisLine={false} tickLine={false} />
-                              <YAxis yAxisId="left" domain={['dataMin - 1', 'dataMax + 1']} tick={{fontSize:10, fill:'#3b82f6', fontFamily: 'Inter'}} axisLine={false} tickLine={false} width={40} />
-                              <YAxis yAxisId="right" orientation="right" tick={{fontSize:10, fill:'#10b981', fontFamily: 'Inter'}} axisLine={false} tickLine={false} width={40} />
-                              <Tooltip contentStyle={{backgroundColor:'#18181b', borderRadius:'16px', border:'1px solid rgba(255,255,255,0.1)', color:'#fff', fontFamily: 'Inter'}} itemStyle={{fontSize:'12px', fontWeight:'bold'}}/>
-                              <Bar yAxisId="right" dataKey="steps" fill="#10b981" barSize={8} radius={[4, 4, 0, 0]} fillOpacity={0.6} />
-                              <Line yAxisId="left" type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={2} dot={{r:3, fill:'#3b82f6', strokeWidth:2, stroke:'#18181b'}} connectNulls={true} animationDuration={1000} />
+                              <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={10} axisLine={false} tickLine={false} />
+                              <YAxis domain={['auto', 'auto']} stroke="rgba(255,255,255,0.3)" fontSize={10} axisLine={false} tickLine={false} width={40} />
+                              <Area type="monotone" dataKey="Weight" stroke="#3b82f6" fill="rgba(59,130,246,0.1)" strokeWidth={3} dot={{fill: "#3b82f6", r:4, strokeWidth:2, stroke:"#111"}} activeDot={{r:6, strokeWidth:0}}/>
                           </ComposedChart>
                       </ResponsiveContainer>
                   </div>
               )}
-
-              <h3 className="text-on-surface-variant font-label font-bold text-[10px] uppercase tracking-widest pl-2 mb-4">Letzte 7 Tage</h3>
-                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              
+              <div className="space-y-3">
                    {last7.map(l => (
                        <div key={l.d} className="bg-surface-container border border-white/5 p-4 rounded-2xl flex items-center justify-between shadow-lg">
                            <div className="text-xs font-label font-bold text-on-surface-variant w-16">{new Date(l.d).toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'})}</div>
                            <div className="flex gap-2 flex-1 justify-end items-center">
                                <div className="relative">
-                                   <input type="number" value={l.w || ''} onChange={(e) => updateEntry(l.d, 'w', e.target.value)} className="w-16 bg-surface-container-highest border border-[#3b82f6]/30 rounded-xl py-2 text-center text-sm font-headline font-black text-[#3b82f6] outline-none focus:border-[#3b82f6] transition-colors" placeholder="kg" />
+                                   <input type="text" inputMode="decimal" value={l.w || ''} onChange={(e) => updateEntry(l.d, 'w', e.target.value.replace(/[^0-9.,]/g, ''))} className="w-16 bg-surface-container-highest border border-[#3b82f6]/30 rounded-xl py-2 text-center text-sm font-headline font-black text-[#3b82f6] outline-none focus:border-[#3b82f6] transition-colors" placeholder="kg" />
                                </div>
                                <div className="relative">
-                                   <input type="number" value={l.s || ''} onChange={(e) => updateEntry(l.d, 's', e.target.value)} className="w-16 bg-surface-container-highest border border-[#10b981]/30 rounded-xl py-2 text-center text-sm font-headline font-black text-[#10b981] outline-none focus:border-[#10b981] transition-colors" placeholder="steps" />
+                                   <input type="text" inputMode="decimal" value={l.s || ''} onChange={(e) => updateEntry(l.d, 's', e.target.value.replace(/[^0-9.,]/g, ''))} className="w-16 bg-surface-container-highest border border-[#10b981]/30 rounded-xl py-2 text-center text-sm font-headline font-black text-[#10b981] outline-none focus:border-[#10b981] transition-colors" placeholder="steps" />
                                </div>
                                <button onClick={() => remove(l.d)} className="p-2 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error-container/20 flex items-center justify-center w-8 h-8"><span className="material-symbols-outlined text-[16px]">delete</span></button>
                            </div>
@@ -232,242 +269,178 @@ const BodyView = ({ data, saveData, showToast }: { data: AppData, saveData: (d: 
     );
 };
 
-const TrainingView = ({ 
-    data, saveData, activeSession, updateSession, nav, showToast 
-  }: {
-    data: AppData, saveData: (d: AppData)=>void, activeSession: ActiveSession, 
-    updateSession: (s: ActiveSession)=>void, nav: (s:string)=>void, showToast: (s:string)=>void
-  }) => {
-      const [note, setNote] = useState("");
-      const [confirmMode, setConfirmMode] = useState<'save' | 'abort' | null>(null);
+// ================= TRAINING VIEW RECOVERY =================
+const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showToast }: any) => {
+    // If no start time, redirect or show message. But wait, normally TrainingView just shows the current activeSession.
+    
+    if (!activeSession || !activeSession.start) {
+        return (
+            <main className="pb-24 pt-6 px-4 text-center">
+                 <h2 className="font-headline font-black text-2xl text-on-surface mt-8 mb-4">Kein aktives Training</h2>
+                 <button onClick={() => nav('plan')} className="px-6 py-3 bg-primary-container text-on-primary rounded-full font-bold">Zum Plan</button>
+            </main>
+        );
+    }
+    
+    const exIds = Object.keys(activeSession.exercises).sort((a,b) => activeSession.exercises[a].order - activeSession.exercises[b].order);
+    
+    const addSet = (id: string, defReps: number = 10, isCardio: boolean) => {
+        const ns = JSON.parse(JSON.stringify(activeSession));
+        const prevSets = ns.exercises[id].sets;
+        const lastSet = prevSets.length > 0 ? prevSets[prevSets.length-1] : null;
+        ns.exercises[id].sets.push({
+            w: lastSet ? lastSet.w : 0,
+            r: isCardio ? 0 : (lastSet ? lastSet.r : defReps),
+            type: 'W'
+        });
+        updateSession(ns);
+    };
 
-      const performFinish = () => { 
-          try {
-            const finalDur = new Date(Date.now() - (activeSession.start||Date.now())).toISOString().substr(11,8);
-            
-            // Cleanup and sanitize data before saving to history
-            const cleanExercises = JSON.parse(JSON.stringify(activeSession.exercises));
-            Object.keys(cleanExercises).forEach(id => {
-                cleanExercises[id].sets = cleanExercises[id].sets
-                    .map((s: any) => {
-                        delete s.completed;
-                        
-                        // Sanitize weight
-                        const w = Number(s.w);
-                        s.w = isNaN(w) ? 0 : w;
-                        
-                        // Sanitize reps
-                        const r = Number(s.r);
-                        s.r = isNaN(r) ? 0 : r;
-                        
-                        // Sanitize RPE
-                        if (s.rpe === undefined || s.rpe === null || s.rpe === "") {
-                            delete s.rpe;
-                        } else {
-                            const rpe = Number(s.rpe);
-                            if (isNaN(rpe)) {
-                                delete s.rpe;
-                            } else {
-                                s.rpe = rpe;
-                            }
-                        }
-                        
-                        return s;
-                    })
-                    // Filter out sets that are completely empty (0 weight and 0 reps)
-                    .filter((s: any) => s.w > 0 || s.r > 0);
-                
-                // Remove the exercise completely if no valid sets remain
-                if (cleanExercises[id].sets.length === 0) {
-                    delete cleanExercises[id];
-                }
-            });
+    const removeSet = (id: string, idx: number) => {
+        const ns = JSON.parse(JSON.stringify(activeSession));
+        ns.exercises[id].sets.splice(idx, 1);
+        updateSession(ns);
+    };
 
-            // If no exercises are left after cleanup, we might not want to save an empty workout
-            if (Object.keys(cleanExercises).length === 0) {
-                updateSession({ start: null, exercises: {} }); 
-                setConfirmMode(null);
-                nav('home'); 
-                showToast("Leeres Workout verworfen."); 
-                return;
-            }
+    const completeSession = () => {
+        const hEntry: WorkoutLog = {
+            d: new Date().toISOString(),
+            s: activeSession
+        };
+        const updatedData = { ...data, h: [hEntry, ...(data.h || [])] };
+        saveData(updatedData);
+        updateSession({ start: null, exercises: {} });
+        showToast("Training beendet! 💪");
+        nav('home');
+    };
 
-            const newHistory = [{ d: activeSession.start || Date.now(), t: finalDur, note: note, s: cleanExercises }, ...data.h];
-            saveData({ ...data, h: newHistory }); 
-            
-            updateSession({ start: null, exercises: {} }); 
-            setConfirmMode(null);
-
-            setTimeout(() => {
-                nav('history'); 
-                showToast("Sehr gut! 💪"); 
-            }, 50);
-          } catch(err) {
-              alert("Fehler: " + err);
-          }
-      };
-
-      const performAbort = () => {
-          updateSession({start:null,exercises:{}});
-          setConfirmMode(null);
-          nav('home');
-      };
-
-      const sortedIds = Object.keys(activeSession.exercises).sort((a,b) => activeSession.exercises[a].order - activeSession.exercises[b].order);
-      
-      return (
-          <div className="w-full relative">
+    return (
+        <main className="pb-32 pt-6 px-2 animate-fade-in relative max-w-lg mx-auto">
             <TimerDisplay startTime={activeSession.start} />
+            <div className="flex justify-between items-center mb-6 px-2">
+                <h2 className="font-headline font-black text-3xl tracking-tight text-on-surface">Live Training</h2>
+                <button onClick={() => {
+                     if (confirm("Workout wirklich abbrechen?")) {
+                         updateSession({ start: null, exercises: {} });
+                         nav('home');
+                     }
+                }} className="text-error font-bold font-label text-xs uppercase tracking-widest bg-error-container/20 px-3 py-1.5 rounded-full hover:bg-error/20 transition-colors">Abbrechen</button>
+            </div>
             
-            {/* Custom Confirmation Modal */}
-            {confirmMode && (
-                <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in" onClick={() => setConfirmMode(null)}>
-                    <div className="bg-surface-container border border-white/10 p-6 rounded-[2rem] w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-xl font-headline font-black text-on-surface mb-2 uppercase italic tracking-tighter">
-                            {confirmMode === 'save' ? 'Training beenden?' : 'Training abbrechen?'}
-                        </h3>
-                        <p className="text-on-surface-variant text-sm font-body mb-6">
-                            {confirmMode === 'save' ? 'Die Einheit wird im Logbuch gespeichert.' : 'Alle Fortschritte dieser Einheit gehen verloren.'}
-                        </p>
-                        <div className="flex gap-3">
-                            <button onClick={() => setConfirmMode(null)} className="flex-1 py-4 bg-surface-container-high rounded-xl font-label font-bold text-xs uppercase text-on-surface-variant">Zurück</button>
-                            <button 
-                                onClick={confirmMode === 'save' ? performFinish : performAbort} 
-                                className={`flex-1 py-4 rounded-xl font-label font-bold text-xs uppercase text-black ${confirmMode === 'save' ? 'bg-primary-container' : 'bg-red-500'}`}
-                            >
-                                {confirmMode === 'save' ? 'Speichern' : 'Löschen'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            
-            <div className="pt-28 pb-48 px-6 space-y-6 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto">
-                <div className="mb-6">
-                    <h2 className="text-4xl font-headline font-black text-on-surface tracking-tighter leading-tight uppercase">Heutiges <br/><span className="text-primary-container">Training</span></h2>
-                    <p className="text-on-surface-variant font-label font-bold text-sm uppercase tracking-widest mt-2">Aktives Workout</p>
-                </div>
-
-                {sortedIds.map(id => {
-                    const ex = data.db[id]; if(!ex) return null;
-                    const sets = activeSession.exercises[id].sets;
-                    const prog = calculateProgression(ex, data.h);
-                    
-                    // Count working sets
-                    const workingSetsCount = sets.filter((s:any) => s.type === 'A').length;
+            <section className="space-y-4">
+                {exIds.map(id => {
+                    const exData = activeSession.exercises[id];
+                    const exDef = data.db[id];
+                    if (!exDef) return null;
+                    const isCardio = exDef.t === 'cardio';
                     
                     return (
-                        <div key={id} className="bg-surface-container rounded-3xl p-6 border border-white/5 shadow-2xl">
-                            <div className="mb-4">
-                                <h3 className="font-headline font-black text-on-surface text-xl uppercase tracking-tighter flex items-center gap-2 flex-wrap">
-                                    {ex.n}
-                                    <label className="flex items-center gap-1 bg-primary-container/10 px-2 py-1 rounded-lg border border-transparent focus-within:border-primary-container/50 transition-colors">
-                                        <span className="text-xs font-label font-bold text-primary-container uppercase tracking-widest leading-none">H:</span>
-                                        <input 
-                                            type="text" 
-                                            value={ex.h !== undefined ? ex.h : ''} 
-                                            onChange={e => {
-                                                const nd = JSON.parse(JSON.stringify(data));
-                                                nd.db[id].h = e.target.value;
-                                                saveData(nd);
-                                            }} 
-                                            className="w-12 bg-transparent text-primary-container font-headline font-black text-sm outline-none border-none p-0 focus:ring-0" 
-                                            placeholder="-" 
-                                        />
-                                    </label>
-                                </h3>
-                                <div className="text-on-surface-variant font-label font-bold text-xs uppercase tracking-widest mt-1 flex gap-2">
-                                    <span>{workingSetsCount} {workingSetsCount === 1 ? 'SATZ' : 'SÄTZE'}</span>
-                                    {ex.t !== 'cardio' && <span>• ZIEL: {prog.w}kg x {prog.r}</span>}
-                                </div>
-                            </div>
-                            
-                            <div className="space-y-3">
-                                {sets.map((s: any, idx) => {
-                                    const isCardio = ex.t === 'cardio';
-                                    return (
-                                    <div key={idx} className={`flex items-center gap-2 p-2 rounded-2xl border transition-all ${s.completed ? 'bg-primary-container/10 border-primary-container/30' : 'bg-background border-white/5'}`}>
-                                        <button onClick={() => {
-                                            const ns = JSON.parse(JSON.stringify(activeSession));
-                                            ns.exercises[id].sets[idx].type = s.type === 'W' ? 'A' : 'W';
-                                            updateSession(ns);
-                                        }} className={`w-10 h-10 rounded-xl font-headline font-black text-xs flex items-center justify-center flex-shrink-0 ${s.type==='W'?'bg-surface-container-high text-on-surface-variant':'bg-primary-container text-on-primary'}`}>{s.type}</button>
-                                        
-                                        <div className="flex-1 flex items-center justify-center gap-1">
-                                            <input type="number" step={(ex.h && ex.h !== 0 && ex.h !== "0") ? "4.5" : "0.5"} value={s.w} onChange={e => {
-                                                const ns = JSON.parse(JSON.stringify(activeSession));
-                                                ns.exercises[id].sets[idx].w = parseFloat(e.target.value);
-                                                updateSession(ns);
-                                            }} className="w-20 bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0" />
-                                            <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">{isCardio ? 'MIN' : 'KG'}</span>
-                                        </div>
-                                        
-                                        {isCardio ? null : (
-                                            <>
-                                                <div className="flex-1 flex items-center justify-center gap-1">
-                                                    <input type="number" value={s.r} onChange={e => {
-                                                        const ns = JSON.parse(JSON.stringify(activeSession));
-                                                        ns.exercises[id].sets[idx].r = parseInt(e.target.value);
-                                                        updateSession(ns);
-                                                    }} className="w-12 bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0" />
-                                                    <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">x</span>
-                                                </div>
+                        <div key={id} className="bg-surface-container border border-white/5 rounded-3xl p-4 shadow-xl">
+                             <div className="flex items-center gap-3 mb-4">
+                                  <div className="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center flex-shrink-0 border border-white/10">
+                                      <span className="font-label font-bold text-on-surface-variant text-xs">{exDef.m.substring(0,3).toUpperCase()}</span>
+                                  </div>
+                                  <div className="flex-1">
+                                      <h3 className="font-headline font-black text-lg text-on-surface leading-tight">{exDef.n}</h3>
+                                  </div>
+                                  <input 
+                                      type="number" 
+                                      value={exData.order} 
+                                      onChange={(e) => {
+                                          const ns = {...activeSession};
+                                          ns.exercises[id].order = parseInt(e.target.value) || 0;
+                                          updateSession(ns);
+                                      }}
+                                      className="w-10 h-10 bg-surface-container-highest text-on-surface font-mono font-black text-center rounded-xl focus:outline-none border border-white/10 p-0"
+                                  />
+                             </div>
+                             
+                             <div className="space-y-2">
+                                  {exData.sets.map((s: any, idx: number) => (
+                                      <div key={idx} className="relative flex items-center gap-1 p-2 rounded-2xl border border-white/5 bg-surface-container-highest">
+                                          <button onClick={() => {
+                                              const ns = JSON.parse(JSON.stringify(activeSession));
+                                              ns.exercises[id].sets[idx].type = s.type === 'W' ? 'A' : 'W';
+                                              updateSession(ns);
+                                          }} className={`w-10 h-10 rounded-xl font-headline font-black text-xs flex items-center justify-center flex-shrink-0 ${s.type==='W'?'bg-surface-container-highest border border-white/10 text-on-surface-variant':'bg-primary-container text-on-primary'}`}>{s.type}</button>
+                                          
+                                          <div className="flex-1 flex items-center justify-center gap-1">
+                                              <NumberStepper 
+                                                  value={s.w} 
+                                                  step={(exDef.h && exDef.h !== 0 && exDef.h !== "0") ? 4.5 : 0.5} 
+                                                  isDecimal={true} 
+                                                  label={isCardio ? 'MIN' : 'KG'} 
+                                                  onChange={(val: number) => {
+                                                      const ns = JSON.parse(JSON.stringify(activeSession));
+                                                      ns.exercises[id].sets[idx].w = val;
+                                                      updateSession(ns);
+                                                  }}
+                                                  className="w-[72px] bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0 leading-none h-8"
+                                              />
+                                          </div>
+                                          
+                                          {isCardio ? null : (
+                                              <>
+                                                  <div className="flex-1 flex items-center justify-center gap-1">
+                                                      <NumberStepper 
+                                                          value={s.r} 
+                                                          step={1} 
+                                                          isDecimal={false} 
+                                                          label="x" 
+                                                          onChange={(val: number) => {
+                                                              const ns = JSON.parse(JSON.stringify(activeSession));
+                                                              ns.exercises[id].sets[idx].r = Math.round(val);
+                                                              updateSession(ns);
+                                                          }}
+                                                          className="w-12 bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0 leading-none h-8"
+                                                      />
+                                                  </div>
 
-                                                <div className="flex-1 flex items-center justify-center gap-1">
-                                                    <input type="number" step="0.5" value={s.rpe !== undefined ? s.rpe : ''} onChange={e => {
-                                                        const ns = JSON.parse(JSON.stringify(activeSession));
-                                                        ns.exercises[id].sets[idx].rpe = parseFloat(e.target.value);
-                                                        updateSession(ns);
-                                                    }} className="w-12 bg-transparent text-center font-headline font-black text-2xl text-primary-container outline-none border-none p-0 focus:ring-0" placeholder="-" />
-                                                    <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">RIR</span>
-                                                </div>
-                                            </>
-                                        )}
-                                        
-                                        <button onClick={() => {
-                                            const ns = JSON.parse(JSON.stringify(activeSession));
-                                            ns.exercises[id].sets[idx].completed = !s.completed;
-                                            updateSession(ns);
-                                        }} className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors flex-shrink-0 ${s.completed ? 'bg-primary-container text-on-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
-                                            <span className="material-symbols-outlined text-[24px]">check</span>
-                                        </button>
-                                        
-                                        <button onClick={() => {
-                                            const ns = JSON.parse(JSON.stringify(activeSession));
-                                            ns.exercises[id].sets.splice(idx,1);
-                                            updateSession(ns);
-                                        }} className="text-on-surface-variant hover:text-red-500 p-2 flex-shrink-0"><span className="material-symbols-outlined text-[16px]">close</span></button>
-                                    </div>
-                                )})}
-                                <button onClick={() => {
-                                    const ns = JSON.parse(JSON.stringify(activeSession));
-                                    const lastSet = ns.exercises[id].sets.length > 0 ? ns.exercises[id].sets[ns.exercises[id].sets.length - 1] : null;
-                                    const newWeight = lastSet ? lastSet.w : prog.w;
-                                    ns.exercises[id].sets.push({w:newWeight,r:10,type:'A',rpe:8, completed: false}); 
-                                    updateSession(ns);
-                                }} className="w-full py-3 bg-surface-container-high rounded-2xl text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest hover:bg-surface-container transition-colors">+ Satz hinzufügen</button>
-                            </div>
+                                                  <div className="flex-1 flex items-center justify-center gap-1">
+                                                      <NumberStepper 
+                                                          value={s.rpe !== undefined ? s.rpe : NaN} 
+                                                          step={0.5} 
+                                                          isDecimal={true} 
+                                                          label="RIR" 
+                                                          onChange={(val: number) => {
+                                                              const ns = JSON.parse(JSON.stringify(activeSession));
+                                                              ns.exercises[id].sets[idx].rpe = isNaN(val) ? undefined : val;
+                                                              updateSession(ns);
+                                                          }}
+                                                          className="w-12 bg-transparent text-center font-headline font-black text-2xl text-primary-container outline-none border-none p-0 focus:ring-0 leading-none h-8"
+                                                      />
+                                                  </div>
+                                              </>
+                                          )}
+                                          
+                                          <button onClick={() => removeSet(id, idx)} className="w-8 h-10 flex items-center justify-center text-on-surface-variant hover:text-error transition-colors flex-shrink-0 active:scale-95">
+                                              <span className="material-symbols-outlined text-[16px]">close</span>
+                                          </button>
+                                      </div>
+                                  ))}
+                             </div>
+                             
+                             <button onClick={() => addSet(id, 10, isCardio)} className="w-full mt-3 py-3 rounded-2xl border-2 border-dashed border-white/10 text-on-surface-variant font-label font-bold text-xs uppercase tracking-widest hover:border-primary-container hover:text-primary-container hover:bg-primary-container/10 transition-all flex items-center justify-center gap-2">
+                                  <span className="material-symbols-outlined text-[18px]">add</span> {isCardio ? 'Zeit Hinzufügen' : 'Set Hinzufügen'}
+                             </button>
                         </div>
                     );
                 })}
-                
-                <div className="space-y-4 pt-6">
-                    <button type="button" onClick={() => setConfirmMode('save')} className="w-full py-5 bg-primary-container text-on-primary rounded-[2rem] font-headline font-black text-xl glow-primary uppercase tracking-tighter flex items-center justify-center gap-2 active:scale-95 transition-transform">
-                        <span className="material-symbols-outlined text-[28px]">check_circle</span> Training Abschließen
-                    </button>
-
-                    <div className="bg-surface-container p-4 rounded-2xl border border-white/5">
-                        <textarea placeholder="Notizen zur Einheit..." value={note} onChange={e=>setNote(e.target.value)} className="w-full bg-background text-on-surface font-body text-sm p-4 rounded-xl border border-white/10 h-24 outline-none focus:border-primary-container" />
-                    </div>
-                    
-                    <button type="button" onClick={() => setConfirmMode('abort')} className="w-full py-4 text-on-surface-variant font-label font-bold text-xs uppercase tracking-widest hover:text-red-500 transition-colors text-center">
-                        Training vorzeitig beenden
+            </section>
+            
+            <div className="fixed bottom-20 left-0 w-full px-4 z-40 pointer-events-none">
+                <div className="max-w-lg mx-auto pointer-events-auto">
+                    <button onClick={completeSession} className="w-full py-5 bg-[#10b981] text-black font-headline font-black rounded-3xl shadow-[0_0_30px_rgba(16,185,129,0.3)] text-lg uppercase tracking-wider hover:bg-[#0ea5e9] transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
+                        <span className="material-symbols-outlined font-black">check_circle</span>
+                        Training Abschließen
                     </button>
                 </div>
             </div>
-          </div>
-      );
-  };
+            
+        </main>
+    );
+};
+
 
 // --- MAIN APP ---
 
@@ -1712,28 +1685,49 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                                       <div key={sIdx} className="flex items-center gap-2">
                                           <div className="w-4 font-label text-[10px] font-bold text-on-surface-variant">#{sIdx+1}</div>
                                           
-                                          <input type="number" step={(exDef?.h && exDef?.h !== 0 && exDef?.h !== "0") ? "4.5" : "0.5"} value={s.w} onChange={e=>{
-                                              const ns = {...localLog};
-                                              ns.s[id].sets[sIdx].w = parseFloat(e.target.value);
-                                              setLocalLog(ns);
-                                          }} className={`${isCardio ? 'w-20' : 'w-14'} px-0 bg-surface-container-highest border-0 border-b border-white/10 text-on-surface font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors`}/>
+                                          <NumberStepper 
+                                                value={s.w} 
+                                                step={(exDef?.h && exDef?.h !== 0 && exDef?.h !== "0") ? 4.5 : 0.5} 
+                                                isDecimal={true} 
+                                                hideArrows={true}
+                                                onChange={(val: number) => {
+                                                    const ns = {...localLog};
+                                                    ns.s[id].sets[sIdx].w = val;
+                                                    setLocalLog(ns);
+                                                }}
+                                                className={`${isCardio ? 'w-16' : 'w-12'} px-0 bg-surface-container-highest border-0 border-b border-white/10 text-on-surface font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors`}
+                                            />
                                           <span className="text-[8px] text-on-surface-variant font-bold">{isCardio ? 'MIN' : 'KG'}</span>
                                           
                                           {isCardio ? null : (
                                               <>
-                                                  <input type="number" value={s.r} onChange={e=>{
-                                                      const ns = {...localLog};
-                                                      ns.s[id].sets[sIdx].r = parseInt(e.target.value);
-                                                      setLocalLog(ns);
-                                                  }} className="w-10 px-0 bg-surface-container-highest border-0 border-b border-white/10 text-on-surface font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors"/>
-                                                  <span className="text-[8px] text-on-surface-variant font-bold">REPS</span>
+                                                  <NumberStepper 
+                                                value={s.r} 
+                                                step={1} 
+                                                isDecimal={false} 
+                                                hideArrows={true}
+                                                label="REPS" 
+                                                onChange={(val: number) => {
+                                                    const ns = {...localLog};
+                                                    ns.s[id].sets[sIdx].r = Math.round(val);
+                                                    setLocalLog(ns);
+                                                }}
+                                                className="w-10 px-0 bg-surface-container-highest border-0 border-b border-white/10 text-on-surface font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors"
+                                            />
 
-                                                  <input type="number" step="0.5" value={s.rpe !== undefined ? s.rpe : ''} onChange={e=>{
-                                                      const ns = {...localLog};
-                                                      ns.s[id].sets[sIdx].rpe = parseFloat(e.target.value);
-                                                      setLocalLog(ns);
-                                                  }} className="w-10 px-0 bg-surface-container-highest border-0 border-b border-white/10 text-primary-container font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors" placeholder="-"/>
-                                                  <span className="text-[8px] text-on-surface-variant font-bold">RIR</span>
+                                                  <NumberStepper 
+                                                value={s.rpe !== undefined ? s.rpe : NaN} 
+                                                step={0.5} 
+                                                isDecimal={true} 
+                                                hideArrows={true}
+                                                label="RIR" 
+                                                onChange={(val: number) => {
+                                                    const ns = {...localLog};
+                                                    ns.s[id].sets[sIdx].rpe = isNaN(val) ? undefined : val;
+                                                    setLocalLog(ns);
+                                                }}
+                                                className="w-10 px-0 bg-surface-container-highest border-0 border-b border-white/10 text-primary-container font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors"
+                                            />
                                               </>
                                           )}
 
