@@ -655,10 +655,81 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
 
   /* --- VIEWS --- */
 
+  const getSmartInsight = (d: AppData) => {
+      const logs = d.h;
+      if (!logs || logs.length === 0) {
+          return "Willkommen! Starte dein erstes Workout, um hier Auswertungen zu sehen.";
+      }
+
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      now.setHours(0, 0, 0, 0);
+      
+      const uniqueDates = Array.from(new Set(logs.map(l => {
+          const td = new Date(l.d);
+          td.setMinutes(td.getMinutes() - td.getTimezoneOffset());
+          td.setHours(0, 0, 0, 0);
+          return td.getTime();
+      }))).sort((a,b) => b - a);
+
+      const oneDay = 24 * 60 * 60 * 1000;
+      let streak = 0;
+
+      if (uniqueDates.length > 0) {
+          const diff = Math.round((now.getTime() - uniqueDates[0]) / oneDay);
+          if (diff === 0 || diff === 1) {
+              streak = 1;
+              let currentTs = uniqueDates[0];
+              for (let i = 1; i < uniqueDates.length; i++) {
+                  const checkDiff = Math.round((currentTs - uniqueDates[i]) / oneDay);
+                  if (checkDiff === 1) {
+                      streak++;
+                      currentTs = uniqueDates[i];
+                  } else {
+                      break;
+                  }
+              }
+          }
+      }
+
+      const lastWorkoutDaysAgo = uniqueDates.length > 0 ? Math.round((now.getTime() - uniqueDates[0]) / oneDay) : -1;
+
+      if (streak >= 3) {
+          return `Du bist auf einer ${streak}-Tage Streak! Unglaubliche Konstanz. Weiter so!`;
+      }
+      if (streak === 2) {
+          return "Zwei Tage in Folge trainiert! Starker Rhythmus, bleib dran.";
+      }
+      
+      if (lastWorkoutDaysAgo === 0) {
+          return "Heute schon abgeliefert! Vergiss nicht, Muskeln wachsen in der Regenerationsphase.";
+      } 
+      if (lastWorkoutDaysAgo === 1) {
+          return "Gestern starkes Training absolviert! Wenn du dich fit fühlst, zieh den Plan heute weiter durch.";
+      }
+      if (lastWorkoutDaysAgo > 3) {
+          return `Dein letztes Workout ist ${lastWorkoutDaysAgo} Tage her. Höchste Zeit, wieder anzugreifen!`;
+      }
+      
+      const lastLog = logs.sort((a,b) => b.d - a.d)[0];
+      const setsCount = Object.values(lastLog.s).reduce((acc: number, curr: any) => acc + curr.sets.length, 0);
+      if (setsCount > 10) {
+          return `Dein letztes Workout war ein echtes Volumen-Beast mit ${setsCount} absolvierten Sätzen. Top Leistung!`;
+      }
+
+      const quotes = [
+          "Consistency is the ultimate separator. Keep pushing.",
+          "Der schwerste Schritt ist oft der zur Hantelbank. Den Rest macht die Routine.",
+          "Mache jeden Tag zu deinem Meisterstück."
+      ];
+      return quotes[Math.floor(Date.now() / oneDay) % quotes.length];
+  };
+
   const HomeView = () => {
     const vol = getWeeklyVolume();
     const today = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'short' });
     const time = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    const insightText = getSmartInsight(data);
     
     return (
       <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
@@ -748,7 +819,7 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
                         <span className="font-label text-[10px] uppercase tracking-widest text-primary-container font-bold">Insight</span>
                     </div>
                     <p className="font-body text-sm text-on-surface leading-relaxed font-medium">
-                        "Consistency is the ultimate separator. You're on a 4-day streak. Keep pushing."
+                        "{insightText}"
                     </p>
                 </div>
             </div>
