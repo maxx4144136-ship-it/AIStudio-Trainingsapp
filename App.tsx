@@ -117,6 +117,57 @@ const TimerDisplay = ({ startTime }: { startTime: number | null }) => {
     );
 };
 
+const RestTimerOverlay = ({ timeLeft, totalTime, onCancel, onAddSeconds }: any) => {
+    if (timeLeft === null) return null;
+    const progress = (timeLeft / totalTime) * 100;
+
+    return (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[60] w-[90%] max-w-sm animate-slide-up pointer-events-auto">
+            <div className="bg-surface-container-highest border border-primary-container/30 rounded-[2.5rem] p-4 shadow-2xl flex items-center gap-4 relative overflow-hidden backdrop-blur-xl">
+                <div className="absolute inset-0 bg-primary-container/5 -z-10">
+                    <div className="h-full bg-primary-container/20 transition-all duration-1000 ease-linear" style={{ width: `${progress}%` }}></div>
+                </div>
+                
+                <div className="relative w-14 h-14 flex-shrink-0">
+                    <svg className="w-full h-full -rotate-90">
+                        <circle cx="28" cy="28" r="24" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-white/10" />
+                        <circle 
+                            cx="28" 
+                            cy="28" 
+                            r="24" 
+                            stroke="currentColor" 
+                            strokeWidth="4" 
+                            fill="transparent" 
+                            className="text-primary-container transition-all duration-1000 ease-linear" 
+                            strokeDasharray="150.8" 
+                            strokeDashoffset={150.8 - (150.8 * progress) / 100}
+                        />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center font-headline font-black text-on-surface text-lg">
+                        {timeLeft}
+                    </div>
+                </div>
+
+                <div className="flex-1">
+                    <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Pausen Timer</p>
+                    <div className="flex gap-2 mt-2">
+                        <button onClick={onAddSeconds} className="px-3 py-1 bg-surface-container rounded-full text-[10px] font-bold text-primary-container border border-white/5 active:scale-95 transition-transform flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">add</span>15s
+                        </button>
+                        <button onClick={onCancel} className="px-3 py-1 bg-error-container/20 rounded-full text-[10px] font-bold text-error border border-error/10 active:scale-95 transition-transform">Stop</button>
+                    </div>
+                </div>
+
+                <div className="pr-1">
+                    <button onClick={onCancel} className="text-on-surface-variant p-2 -mr-2">
+                        <span className="material-symbols-outlined text-sm">close</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const NumberStepper = ({ value, onChange, step, label, isDecimal, className, hideArrows = false }: any) => {
     const [localStr, setLocalStr] = React.useState(value == null || isNaN(value) ? "" : String(value).replace('.', ','));
@@ -271,8 +322,27 @@ const BodyView = ({ data, saveData, showToast }: { data: AppData, saveData: (d: 
 
 // ================= TRAINING VIEW RECOVERY =================
 const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showToast }: any) => {
-    // If no start time, redirect or show message. But wait, normally TrainingView just shows the current activeSession.
-    
+    const [restTime, setRestTime] = useState<number | null>(null);
+    const [restTotal, setRestTotal] = useState(180);
+
+    useEffect(() => {
+        let interval: any;
+        if (restTime !== null && restTime > 0) {
+            interval = setInterval(() => {
+                setRestTime(prev => (prev !== null && prev > 0 ? prev - 1 : null));
+            }, 1000);
+        } else if (restTime === 0) {
+            setRestTime(null);
+        }
+        return () => clearInterval(interval);
+    }, [restTime]);
+
+    const startRest = (seconds: number = 180) => {
+        setRestTotal(seconds);
+        setRestTime(seconds);
+        try { if (window.navigator.vibrate) window.navigator.vibrate(50); } catch(e) {}
+    };
+
     if (!activeSession || !activeSession.start) {
         return (
             <main className="pb-24 pt-6 px-4 text-center">
@@ -303,12 +373,27 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
     };
 
     const completeSession = () => {
+        const totalDuration = Date.now() - (activeSession.start || Date.now());
+        const formattedTime = new Date(totalDuration).toISOString().substr(11, 8);
+        
+        // Deep copy of exercises to avoid reference issues
+        const exercisesCopy = JSON.parse(JSON.stringify(activeSession.exercises));
+        
+        // Mark all sets as completed for history consistency
+        Object.keys(exercisesCopy).forEach(id => {
+            exercisesCopy[id].sets.forEach((s: any) => {
+                s.completed = true;
+                s.done = true;
+            });
+        });
+
         const hEntry: WorkoutLog = {
             d: Date.now(),
-            s: activeSession.exercises,
-            t: new Date(Date.now() - (activeSession.start || Date.now())).toISOString().substr(11, 8),
+            s: exercisesCopy,
+            t: formattedTime,
             note: ""
         };
+        
         const updatedData = { ...data, h: [hEntry, ...(data.h || [])] };
         saveData(updatedData);
         updateSession({ start: null, exercises: {} });
@@ -319,6 +404,15 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
     return (
         <main className="pb-32 pt-6 px-2 animate-fade-in relative max-w-lg mx-auto">
             <TimerDisplay startTime={activeSession.start} />
+            <RestTimerOverlay 
+                timeLeft={restTime} 
+                totalTime={restTotal} 
+                onCancel={() => setRestTime(null)} 
+                onAddSeconds={() => {
+                    setRestTime(prev => (prev !== null ? prev + 15 : null));
+                    setRestTotal(prev => prev + 15);
+                }}
+            />
             <div className="flex justify-between items-center mb-6 px-2">
                 <h2 className="font-headline font-black text-3xl tracking-tight text-on-surface">Live Training</h2>
                 <button onClick={() => {
@@ -342,8 +436,11 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
                                   <div className="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center flex-shrink-0 border border-white/10">
                                       <span className="font-label font-bold text-on-surface-variant text-xs">{exDef.c.substring(0,3).toUpperCase()}</span>
                                   </div>
-                                  <div className="flex-1">
+                                  <div className="flex-1 flex items-center gap-2">
                                       <h3 className="font-headline font-black text-lg text-on-surface leading-tight">{exDef.n}</h3>
+                                      {exData.sets.length > 0 && exData.sets.every((s: any) => s.done || s.completed) && (
+                                          <span className="material-symbols-outlined text-[#10b981] text-sm font-black animate-bounce-subtle">verified</span>
+                                      )}
                                   </div>
                                   <input 
                                       type="number" 
@@ -359,12 +456,32 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
                              
                              <div className="space-y-2">
                                   {exData.sets.map((s: any, idx: number) => (
-                                      <div key={idx} className="relative flex items-center gap-1 p-2 rounded-2xl border border-white/5 bg-surface-container-highest">
+                                       <div key={idx} className={`relative flex items-center gap-1 p-2 rounded-2xl border transition-all duration-300 ${(s.done || s.completed) ? 'border-[#10b981]/30 bg-[#10b981]/5 opacity-60 scale-[0.98]' : 'border-white/5 bg-surface-container-highest'}`}>
                                           <button onClick={() => {
                                               const ns = JSON.parse(JSON.stringify(activeSession));
                                               ns.exercises[id].sets[idx].type = s.type === 'W' ? 'A' : 'W';
                                               updateSession(ns);
                                           }} className={`w-10 h-10 rounded-xl font-headline font-black text-xs flex items-center justify-center flex-shrink-0 ${s.type==='W'?'bg-surface-container-highest border border-white/10 text-on-surface-variant':'bg-primary-container text-on-primary'}`}>{s.type}</button>
+                                          
+                                          <button 
+                                              onClick={() => {
+                                                  const ns = JSON.parse(JSON.stringify(activeSession));
+                                                  const wasDone = ns.exercises[id].sets[idx].done || ns.exercises[id].sets[idx].completed;
+                                                  const isDone = !wasDone;
+                                                  ns.exercises[id].sets[idx].done = isDone;
+                                                  ns.exercises[id].sets[idx].completed = isDone;
+                                                  if (isDone) {
+                                                      ns.exercises[id].sets[idx].doneAt = Date.now();
+                                                      startRest(180);
+                                                  } else {
+                                                      setRestTime(null);
+                                                  }
+                                                  updateSession(ns);
+                                              }} 
+                                              className={`w-12 h-10 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${(s.done || s.completed) ? 'bg-[#10b981] text-black shadow-lg shadow-[#10b981]/20' : 'bg-surface-container-highest border border-white/10 text-on-surface-variant hover:bg-white/5'}`}
+                                          >
+                                              <span className="material-symbols-outlined font-black text-xl">{(s.done || s.completed) ? 'check_circle' : 'check'}</span>
+                                          </button>
                                           
                                           <div className="flex-1 flex items-center justify-center gap-1">
                                               <NumberStepper 
@@ -1477,6 +1594,67 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
           );
       }
       
+      const getStreak = () => {
+          if (!data.h || data.h.length === 0) return 0;
+          
+          const workoutDays = Array.from(new Set(data.h.map(log => 
+              new Date(log.d).toISOString().split('T')[0]
+          ))).sort((a,b) => b.localeCompare(a));
+          
+          if (workoutDays.length === 0) return 0;
+
+          let streak = 0;
+          let today = new Date().toISOString().split('T')[0];
+          let yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+          
+          if (workoutDays[0] !== today && workoutDays[0] !== yesterday) return 0;
+          
+          let currentDay = new Date(workoutDays[0]);
+          streak = 1;
+
+          for (let i = 1; i < workoutDays.length; i++) {
+              let prevDay = new Date(workoutDays[i]);
+              let diff = (currentDay.getTime() - prevDay.getTime()) / (1000 * 60 * 60 * 24);
+              if (Math.round(diff) === 1) {
+                  streak++;
+                  currentDay = prevDay;
+              } else {
+                  break;
+              }
+          }
+          return streak;
+      };
+
+      const getBestStreak = () => {
+          if (!data.h || data.h.length === 0) return 0;
+          const workoutDays = Array.from(new Set(data.h.map(log => 
+              new Date(log.d).toISOString().split('T')[0]
+          ))).sort((a,b) => a.localeCompare(b));
+          
+          let best = 0;
+          let current = 0;
+          let lastDay: Date | null = null;
+
+          workoutDays.forEach(dStr => {
+              const d = new Date(dStr);
+              if (!lastDay) {
+                  current = 1;
+              } else {
+                  const diff = (d.getTime() - lastDay.getTime()) / (1000 * 60 * 60 * 24);
+                  if (Math.round(diff) === 1) {
+                      current++;
+                  } else {
+                      if (current > best) best = current;
+                      current = 1;
+                  }
+              }
+              lastDay = d;
+          });
+          return Math.max(best, current);
+      };
+
+      const streak = getStreak();
+      const bestStreak = getBestStreak();
       const vol = getWeeklyVolume();
       const bw = data.bodyLogs.length > 0 ? data.bodyLogs[0].w : "--";
       const steps = data.bodyLogs.length > 0 ? data.bodyLogs[0].s : "--";
@@ -1494,7 +1672,14 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                       <Zap size={24} className="fill-black" />
                       <h3 className="font-black text-lg uppercase tracking-widest">Active Streak</h3>
                   </div>
-                  <div className="text-4xl font-black tracking-tighter">24 DAYS</div>
+                  <div className="flex items-baseline gap-2">
+                           <div className="text-5xl font-black tracking-tighter">{streak}</div>
+                           <div className="text-xl font-black uppercase">Tage</div>
+                       </div>
+                       <div className="mt-4 flex items-center gap-2 bg-black/10 w-fit px-3 py-1 rounded-full border border-black/5">
+                           <span className="material-symbols-outlined text-sm">workspace_premium</span>
+                           <span className="text-[10px] font-bold uppercase tracking-widest">Best: {bestStreak} Tage</span>
+                       </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

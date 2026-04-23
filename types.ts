@@ -16,6 +16,8 @@ export interface SetLog {
   r: number; // reps
   rpe?: number;
   type: 'A' | 'W'; // Arbeittssatz or Warmup
+  done?: boolean;
+  doneAt?: number;
 }
 
 export interface WorkoutLog {
