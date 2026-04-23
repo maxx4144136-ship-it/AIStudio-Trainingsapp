@@ -8,20 +8,13 @@ import { FALLBACK_DATA, CAT_ORDER } from './constants';
 import { calculateProgression, calculateWarmup, generateSnapshotHTML } from './utils/logic';
 import { fetchFromGitHub, saveToGitHub } from './services/github';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart, CartesianGrid, LabelList, ComposedChart, Bar } from 'recharts';
-import { supabase, getCurrentUser, getUserData, saveUserData, subscribeToUserData } from './supabase';
-import { loginWithGoogle as firebaseLogin, logout as firebaseLogout, onAuthStateChanged, auth } from './firebase';
+import { auth, db, loginWithGoogle, logout } from './firebase';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { GoogleGenAI } from '@google/genai';
 import Markdown from 'react-markdown';
 
-// Firebase Auth User type (used by Firebase onAuthStateChanged)
-type FirebaseUser = {
-  uid: string;
-  email: string | null;
-  displayName: string | null;
-  photoURL: string | null;
-};
-
-const APP_VERSION = "V27.24 (Supabase Integration)";
+const APP_VERSION = "V27.24 (STABLE)";
 
 const THEME = {
   bg: "bg-background",
@@ -366,7 +359,14 @@ const TrainingView = ({
                     return (
                         <div key={id} className="bg-surface-container rounded-3xl p-6 border border-white/5 shadow-2xl">
                             <div className="mb-4">
-                                <h3 className="font-headline font-black text-on-surface text-xl uppercase tracking-tighter">{ex.n}</h3>
+                                <h3 className="font-headline font-black text-on-surface text-xl uppercase tracking-tighter flex items-center gap-2 flex-wrap">
+                                    {ex.n}
+                                    {ex.h && ex.h !== 0 && ex.h !== "0" && (
+                                        <span className="text-sm font-label font-bold text-primary-container bg-primary-container/10 px-2 py-1 rounded-md">
+                                            HÖHE: {ex.h}
+                                        </span>
+                                    )}
+                                </h3>
                                 <div className="text-on-surface-variant font-label font-bold text-xs uppercase tracking-widest mt-1">{workingSetsCount} SÄTZE • ZIEL: {prog.w}kg x {prog.r}</div>
                             </div>
                             
@@ -485,7 +485,7 @@ const mergeWithFallback = (parsed: any): AppData => {
 
 const MainApp = ({ user }: { user: FirebaseUser }) => {
   const [data, setData] = useState<AppData>(FALLBACK_DATA);
-  const [view, setView] = useState<string>('home');
+  const [view, setView] = useState<string>(() => localStorage.getItem('tm_view') || 'home');
   const [userName, setUserName] = useState<string>(() => localStorage.getItem('tm_userName') || user.displayName || 'Markus Kauderer');
   const [userPhoto, setUserPhoto] = useState<string>(() => localStorage.getItem('tm_userPhoto') || user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&h=100&fit=crop');
   const [showExportModal, setShowExportModal] = useState(false);
@@ -497,19 +497,50 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
       } catch { return { start: null, exercises: {} }; }
   });
 
-  // Auto-load from Supabase on startup
+  // Auto-load from Firebase on startup
   useEffect(() => {
-    const channel = subscribeToUserData(user.uid, (newData) => {
-      if (newData) {
-        const merged = mergeWithFallback(newData as AppData);
-        setData(merged);
-        localStorage.setItem('tm_data', JSON.stringify(merged));
-        console.log("Auto-loaded data from Supabase");
-      }
-    });
-    return () => {
-      supabase.removeChannel(channel);
-    };
+      const unsub = onSnapshot(doc(db, `users/${user.uid}/data/appData`), (docSnap) => {
+          if (docSnap.exists()) {
+              const loaded = docSnap.data() as AppData;
+              let merged = mergeWithFallback(loaded);
+              
+              // CRITICAL: Prevent Firebase from overwriting local data that hasn't synced yet
+              // Merge local history with Firebase history to ensure no workouts are lost
+              const localDataStr = localStorage.getItem('tm_data');
+              if (localDataStr) {
+                  try {
+                      const localData = JSON.parse(localDataStr);
+                      if (localData.h && localData.h.length > 0) {
+                          // Combine histories and remove duplicates based on timestamp (d)
+                          const combinedHistory = [...(localData.h || []), ...(merged.h || [])];
+                          const uniqueHistoryMap = new Map();
+                          combinedHistory.forEach(item => {
+                              // If duplicate exists, prefer the one with more data or just keep the first encountered (local)
+                              if (!uniqueHistoryMap.has(item.d)) {
+                                  uniqueHistoryMap.set(item.d, item);
+                              }
+                          });
+                          merged.h = Array.from(uniqueHistoryMap.values()).sort((a: any, b: any) => b.d - a.d);
+                          
+                          // If local had more workouts, push the merged result back to Firebase
+                          if (localData.h.length > (loaded.h?.length || 0)) {
+                              console.log("Local data has more workouts. Syncing merged data to Firebase...");
+                              setDoc(doc(db, `users/${user.uid}/data/appData`), merged).catch(e => console.error("Sync back error", e));
+                          }
+                      }
+                  } catch (e) {
+                      console.error("Error merging local data", e);
+                  }
+              }
+
+              setData(merged);
+              localStorage.setItem('tm_data', JSON.stringify(merged));
+              console.log("Auto-loaded and merged data from Firebase");
+          }
+      }, (err) => {
+          console.error("Firebase sync error:", err);
+      });
+      return () => unsub();
   }, [user.uid]);
 
   const [toast, setToast] = useState<string | null>(null);
@@ -521,6 +552,7 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
       if(id !== 'stats') setAnalyticsEx(null);
       if(id !== 'history-edit') setEditTimestamp(null);
       setView(id); 
+      localStorage.setItem('tm_view', id);
       window.scrollTo(0,0); 
   };
 
@@ -549,9 +581,14 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
       setData(newData); 
       localStorage.setItem('tm_data', JSON.stringify(newData)); 
       
-      // Auto-Sync to Supabase
-      saveUserData(user.id, newData).catch(err => {
-          console.error("Supabase save error:", err);
+      // Auto-Sync to Firebase
+      setDoc(doc(db, `users/${user.uid}/data/appData`), newData)
+      .then(() => {
+          console.log("Firebase sync successful");
+      })
+      .catch(err => {
+          console.error("Firebase save error:", err);
+          showToast("Cloud-Sync Fehler! ⚠️");
       });
   };
   const updateSession = (newSession: ActiveSession) => { setActiveSession(newSession); localStorage.setItem('tm_session', JSON.stringify(newSession)); };
@@ -578,6 +615,11 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
   };
 
   const calculateExercisePriority = (exId: string) => {
+      const ex = data.db[exId];
+      if (ex && ex.prio !== undefined) {
+          return ex.prio;
+      }
+
       const threeWeeksAgo = new Date();
       threeWeeksAgo.setDate(threeWeeksAgo.getDate() - 21);
       threeWeeksAgo.setHours(0,0,0,0);
@@ -1108,15 +1150,20 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                           </div>
                           <div className="flex gap-3">
                               <label className="flex items-center gap-2 bg-surface-container-highest p-2 rounded-xl border border-white/5 flex-1 focus-within:ring-1 focus-within:ring-primary-container transition-shadow">
-                                  <span className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest pl-1">H</span>
-                                  <input type="number" value={ex.h} onChange={(e) => {
+                                  <span className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest pl-1">Height (h)</span>
+                                  <input type="text" value={ex.h !== undefined ? ex.h : ''} onChange={(e) => {
                                       const nd = {...data}; nd.db[ex.id].h = e.target.value; saveData(nd);
+                                  }} className="w-full bg-transparent text-on-surface font-mono font-bold text-center text-sm outline-none border-none focus:ring-0 p-0" placeholder="Stufe/Loch"/>
+                              </label>
+                              <label className="flex items-center justify-center gap-2 bg-surface-container-highest p-2 rounded-xl border border-white/5 flex-1 focus-within:ring-1 focus-within:ring-primary-container transition-shadow">
+                                  <span className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest pl-1" title="Manuelle Sortier-Priorität">Prio</span>
+                                  <input type="number" value={ex.prio !== undefined ? ex.prio : ''} placeholder="Auto" onChange={(e) => {
+                                      const nd = {...data}; 
+                                      if (e.target.value === '') { delete nd.db[ex.id].prio; }
+                                      else { nd.db[ex.id].prio = Number(e.target.value); }
+                                      saveData(nd);
                                   }} className="w-full bg-transparent text-on-surface font-mono font-bold text-center text-sm outline-none border-none focus:ring-0 p-0"/>
                               </label>
-                              <div className="flex items-center justify-center gap-2 bg-surface-container-highest p-2 rounded-xl border border-white/5 flex-1">
-                                  <span className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest pl-1">Prio (Auto)</span>
-                                  <span className="w-full text-on-surface font-mono font-bold text-center text-sm">{calculateExercisePriority(ex.id) === 999 ? '-' : 100 - calculateExercisePriority(ex.id)} Sätze</span>
-                              </div>
                           </div>
                       </div>
                   ))}
@@ -1403,7 +1450,14 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                       const exData = localLog.s[id];
                       return (
                           <div key={id} className="bg-surface-container p-5 rounded-3xl border border-white/5 mb-6">
-                              <h3 className="font-headline font-black text-on-surface text-sm uppercase mb-4">{exDef?.n || id}</h3>
+                              <h3 className="font-headline font-black text-on-surface text-sm uppercase mb-4 flex items-center gap-2 flex-wrap">
+                                  {exDef?.n || id}
+                                  {exDef?.h && exDef.h !== 0 && exDef.h !== "0" && (
+                                      <span className="text-[10px] font-label font-bold text-primary-container bg-primary-container/10 px-2 py-1 rounded-md">
+                                          HÖHE: {exDef.h}
+                                      </span>
+                                  )}
+                              </h3>
                               <div className="space-y-2">
                                   {exData.sets.map((s, sIdx) => (
                                       <div key={sIdx} className="flex items-center gap-2">
@@ -1520,13 +1574,15 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                          }
                      });
 
-                     ns.start = Date.now();
+                     if (!ns.start) {
+                         ns.start = Date.now();
+                     }
                      updateSession(ns);
                      nav('training');
                  }
              }} className={`pointer-events-auto px-8 py-4 rounded-full font-label font-bold text-sm uppercase tracking-widest shadow-[0_0_30px_rgba(234,179,8,0.3)] transition-transform duration-200 ease-in-out flex items-center gap-2 ${Object.keys(activeSession.exercises).length>0 ? 'bg-primary-container text-on-primary hover:scale-[1.02] active:scale-[0.98]' : 'bg-surface-container-highest text-on-surface-variant opacity-50 cursor-not-allowed'}`}>
                  <span className="material-symbols-outlined text-[18px]">play_arrow</span>
-                 TRAINING STARTEN ({Object.keys(activeSession.exercises).length})
+                 {activeSession.start ? 'TRAINING FORTSETZEN' : 'TRAINING STARTEN'} ({Object.keys(activeSession.exercises).length})
              </button>
         </div>
       </main>
@@ -1633,7 +1689,29 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
 
                        <div className="mt-6 pt-6 border-t border-white/5">
                             <h3 className="font-label font-bold text-[10px] text-on-surface-variant uppercase tracking-widest mb-4">Account</h3>
-                            <button onClick={firebaseLogout} className="w-full py-4 bg-error-container text-error hover:bg-error hover:text-on-error transition-colors rounded-2xl font-headline font-black shadow-xl active:scale-95 flex items-center justify-center gap-2">
+                            
+                            <button onClick={() => {
+                                const localDataStr = localStorage.getItem('tm_data');
+                                if (localDataStr) {
+                                    try {
+                                        const localData = JSON.parse(localDataStr);
+                                        setDoc(doc(db, `users/${user.uid}/data/appData`), localData)
+                                        .then(() => showToast("Cloud-Sync erfolgreich! ☁️"))
+                                        .catch(err => {
+                                            console.error(err);
+                                            showToast("Cloud-Sync Fehler! ⚠️");
+                                        });
+                                    } catch (e) {
+                                        showToast("Fehler beim Lesen der lokalen Daten.");
+                                    }
+                                } else {
+                                    showToast("Keine lokalen Daten zum Synchronisieren.");
+                                }
+                            }} className="w-full py-4 mb-3 bg-surface-container-highest text-on-surface hover:bg-primary-container hover:text-on-primary transition-colors rounded-2xl font-headline font-black shadow-xl active:scale-95 flex items-center justify-center gap-2">
+                                <span className="material-symbols-outlined text-[20px]">cloud_sync</span> Cloud-Sync erzwingen
+                            </button>
+
+                            <button onClick={logout} className="w-full py-4 bg-error-container text-error hover:bg-error hover:text-on-error transition-colors rounded-2xl font-headline font-black shadow-xl active:scale-95 flex items-center justify-center gap-2">
                                 <span className="material-symbols-outlined text-[20px]">logout</span> Abmelden
                             </button>
                        </div>
@@ -1731,7 +1809,7 @@ const App = () => {
         <p className="font-label text-sm text-on-surface-variant mb-12 max-w-xs">Bitte melde dich an, um auf deine persönlichen Trainingsdaten zuzugreifen.</p>
         
         <button 
-          onClick={firebaseLogin}
+          onClick={loginWithGoogle}
           className="w-full max-w-xs py-5 bg-white text-black rounded-3xl font-headline font-black text-lg shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-3"
         >
           <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
