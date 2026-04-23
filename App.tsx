@@ -304,8 +304,10 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
 
     const completeSession = () => {
         const hEntry: WorkoutLog = {
-            d: new Date().toISOString(),
-            s: activeSession
+            d: Date.now(),
+            s: activeSession.exercises,
+            t: new Date(Date.now() - (activeSession.start || Date.now())).toISOString().substr(11, 8),
+            note: ""
         };
         const updatedData = { ...data, h: [hEntry, ...(data.h || [])] };
         saveData(updatedData);
@@ -338,7 +340,7 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
                         <div key={id} className="bg-surface-container border border-white/5 rounded-3xl p-4 shadow-xl">
                              <div className="flex items-center gap-3 mb-4">
                                   <div className="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center flex-shrink-0 border border-white/10">
-                                      <span className="font-label font-bold text-on-surface-variant text-xs">{exDef.m.substring(0,3).toUpperCase()}</span>
+                                      <span className="font-label font-bold text-on-surface-variant text-xs">{exDef.c.substring(0,3).toUpperCase()}</span>
                                   </div>
                                   <div className="flex-1">
                                       <h3 className="font-headline font-black text-lg text-on-surface leading-tight">{exDef.n}</h3>
@@ -347,7 +349,7 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
                                       type="number" 
                                       value={exData.order} 
                                       onChange={(e) => {
-                                          const ns = {...activeSession};
+                                          const ns = JSON.parse(JSON.stringify(activeSession));
                                           ns.exercises[id].order = parseInt(e.target.value) || 0;
                                           updateSession(ns);
                                       }}
@@ -445,6 +447,22 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
 // --- MAIN APP ---
 
 const mergeWithFallback = (parsed: any): AppData => {
+    // 1. Sanitize history data (fix previous bugs with string dates or corrupted session structure)
+    if (parsed.h && Array.isArray(parsed.h)) {
+        parsed.h = parsed.h.map((log: any) => {
+            // Fix corrupted .s structure (ActiveSession object saved as .s instead of its exercises)
+            if (log.s && log.s.exercises) {
+                log.s = log.s.exercises;
+            }
+            // Fix corrupted .d timestamp (ISO string instead of number)
+            if (typeof log.d === 'string') {
+                const parsedD = new Date(log.d).getTime();
+                log.d = isNaN(parsedD) ? Date.now() : parsedD;
+            }
+            return log;
+        });
+    }
+
     const localTimestamps = new Set(parsed.h?.map((l: any) => l.d) || []);
     const missingFromHardcoded = FALLBACK_DATA.h.filter(l => !localTimestamps.has(l.d));
     if (missingFromHardcoded.length > 0) {

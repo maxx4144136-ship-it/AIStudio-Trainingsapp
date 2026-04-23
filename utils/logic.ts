@@ -11,9 +11,12 @@ export const calculateProgression = (exercise: ExerciseDef, history: WorkoutLog[
   const sortedHistory = [...history].sort((a, b) => b.d - a.d);
   
   // 2. Find last session with this exercise
-  const lastSession = sortedHistory.find(log => 
-    log.s && log.s[exercise.id] && log.s[exercise.id].sets && log.s[exercise.id].sets.length > 0
-  );
+  const lastSession = sortedHistory.find(log => {
+    if (!log.s) return false;
+    // Handle both old WorkoutLog.s format and corrupted ActiveSession-as-s format
+    const exercises = (log.s as any).exercises || log.s;
+    return exercises[exercise.id] && exercises[exercise.id].sets && exercises[exercise.id].sets.length > 0;
+  });
   
   // Defaults if new
   if (!lastSession) {
@@ -21,8 +24,9 @@ export const calculateProgression = (exercise: ExerciseDef, history: WorkoutLog[
   }
 
   // 3. Filter for Working Sets ('A') only
-  let validSets = lastSession.s[exercise.id].sets.filter(s => s.type === 'A');
-  if (validSets.length === 0) validSets = lastSession.s[exercise.id].sets;
+  const exercises = (lastSession.s as any).exercises || lastSession.s;
+  let validSets = exercises[exercise.id].sets.filter((s: any) => s.type === 'A');
+  if (validSets.length === 0) validSets = exercises[exercise.id].sets;
   if (validSets.length === 0) return { w: exercise.defW, r: 10, isIncrease: false };
 
   // 4. Determine base values
