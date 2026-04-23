@@ -361,17 +361,31 @@ const TrainingView = ({
                             <div className="mb-4">
                                 <h3 className="font-headline font-black text-on-surface text-xl uppercase tracking-tighter flex items-center gap-2 flex-wrap">
                                     {ex.n}
-                                    {ex.h && ex.h !== 0 && ex.h !== "0" && (
-                                        <span className="text-sm font-label font-bold text-primary-container bg-primary-container/10 px-2 py-1 rounded-md">
-                                            HÖHE: {ex.h}
-                                        </span>
-                                    )}
+                                    <label className="flex items-center gap-1 bg-primary-container/10 px-2 py-1 rounded-lg border border-transparent focus-within:border-primary-container/50 transition-colors">
+                                        <span className="text-xs font-label font-bold text-primary-container uppercase tracking-widest leading-none">H:</span>
+                                        <input 
+                                            type="text" 
+                                            value={ex.h !== undefined ? ex.h : ''} 
+                                            onChange={e => {
+                                                const nd = JSON.parse(JSON.stringify(data));
+                                                nd.db[id].h = e.target.value;
+                                                saveData(nd);
+                                            }} 
+                                            className="w-12 bg-transparent text-primary-container font-headline font-black text-sm outline-none border-none p-0 focus:ring-0" 
+                                            placeholder="-" 
+                                        />
+                                    </label>
                                 </h3>
-                                <div className="text-on-surface-variant font-label font-bold text-xs uppercase tracking-widest mt-1">{workingSetsCount} SÄTZE • ZIEL: {prog.w}kg x {prog.r}</div>
+                                <div className="text-on-surface-variant font-label font-bold text-xs uppercase tracking-widest mt-1 flex gap-2">
+                                    <span>{workingSetsCount} {workingSetsCount === 1 ? 'SATZ' : 'SÄTZE'}</span>
+                                    {ex.t !== 'cardio' && <span>• ZIEL: {prog.w}kg x {prog.r}</span>}
+                                </div>
                             </div>
                             
                             <div className="space-y-3">
-                                {sets.map((s: any, idx) => (
+                                {sets.map((s: any, idx) => {
+                                    const isCardio = ex.t === 'cardio';
+                                    return (
                                     <div key={idx} className={`flex items-center gap-2 p-2 rounded-2xl border transition-all ${s.completed ? 'bg-primary-container/10 border-primary-container/30' : 'bg-background border-white/5'}`}>
                                         <button onClick={() => {
                                             const ns = JSON.parse(JSON.stringify(activeSession));
@@ -385,26 +399,30 @@ const TrainingView = ({
                                                 ns.exercises[id].sets[idx].w = parseFloat(e.target.value);
                                                 updateSession(ns);
                                             }} className="w-20 bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0" />
-                                            <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">kg</span>
+                                            <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">{isCardio ? 'MIN' : 'KG'}</span>
                                         </div>
                                         
-                                        <div className="flex-1 flex items-center justify-center gap-1">
-                                            <input type="number" value={s.r} onChange={e => {
-                                                const ns = JSON.parse(JSON.stringify(activeSession));
-                                                ns.exercises[id].sets[idx].r = parseInt(e.target.value);
-                                                updateSession(ns);
-                                            }} className="w-12 bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0" />
-                                            <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">x</span>
-                                        </div>
+                                        {isCardio ? null : (
+                                            <>
+                                                <div className="flex-1 flex items-center justify-center gap-1">
+                                                    <input type="number" value={s.r} onChange={e => {
+                                                        const ns = JSON.parse(JSON.stringify(activeSession));
+                                                        ns.exercises[id].sets[idx].r = parseInt(e.target.value);
+                                                        updateSession(ns);
+                                                    }} className="w-12 bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0" />
+                                                    <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">x</span>
+                                                </div>
 
-                                        <div className="flex-1 flex items-center justify-center gap-1">
-                                            <input type="number" step="0.5" value={s.rpe !== undefined ? s.rpe : ''} onChange={e => {
-                                                const ns = JSON.parse(JSON.stringify(activeSession));
-                                                ns.exercises[id].sets[idx].rpe = parseFloat(e.target.value);
-                                                updateSession(ns);
-                                            }} className="w-12 bg-transparent text-center font-headline font-black text-2xl text-primary-container outline-none border-none p-0 focus:ring-0" placeholder="-" />
-                                            <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">RIR</span>
-                                        </div>
+                                                <div className="flex-1 flex items-center justify-center gap-1">
+                                                    <input type="number" step="0.5" value={s.rpe !== undefined ? s.rpe : ''} onChange={e => {
+                                                        const ns = JSON.parse(JSON.stringify(activeSession));
+                                                        ns.exercises[id].sets[idx].rpe = parseFloat(e.target.value);
+                                                        updateSession(ns);
+                                                    }} className="w-12 bg-transparent text-center font-headline font-black text-2xl text-primary-container outline-none border-none p-0 focus:ring-0" placeholder="-" />
+                                                    <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">RIR</span>
+                                                </div>
+                                            </>
+                                        )}
                                         
                                         <button onClick={() => {
                                             const ns = JSON.parse(JSON.stringify(activeSession));
@@ -420,7 +438,7 @@ const TrainingView = ({
                                             updateSession(ns);
                                         }} className="text-on-surface-variant hover:text-red-500 p-2 flex-shrink-0"><span className="material-symbols-outlined text-[16px]">close</span></button>
                                     </div>
-                                ))}
+                                )})}
                                 <button onClick={() => {
                                     const ns = JSON.parse(JSON.stringify(activeSession));
                                     const lastSet = ns.exercises[id].sets.length > 0 ? ns.exercises[id].sets[ns.exercises[id].sets.length - 1] : null;
@@ -893,6 +911,7 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
       const [res, setRes] = useState("");
       const [dur, setDur] = useState("60");
       const [outcome, setOutcome] = useState("Sieg");
+      const [matchType, setMatchType] = useState("tennis_1");
       const [dateInput, setDateInput] = useState(() => {
           const d = new Date();
           d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -909,7 +928,7 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
               d: selectedDate.getTime(),
               t: new Date(parseInt(dur)*60000).toISOString().substr(11,8),
               note: `Tennis Match: ${res} (${outcome})`,
-              s: { 'tennis_1': { sets: [{w: parseInt(dur), r: 1, type: 'A'}] } }
+              s: { [matchType]: { sets: [{w: parseInt(dur), r: matchType === "tennis_1" ? 1 : 2, type: 'A'}] } }
           };
           saveData({...data, h: [log, ...data.h]});
           showToast("Match gespeichert! 🎾");
@@ -928,9 +947,18 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
                           <label className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-2 block">Datum</label>
                           <input type="date" value={dateInput} onChange={e=>setDateInput(e.target.value)} className="w-full bg-surface-container-highest border border-white/5 rounded-xl p-4 text-on-surface font-bold focus:ring-1 focus:ring-[#10b981]" />
                       </div>
-                      <div>
-                          <label className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-2 block">Ergebnis</label>
-                          <input value={res} onChange={e=>setRes(e.target.value)} placeholder="6:4, 6:2" className="w-full bg-surface-container-highest border border-white/5 rounded-xl p-4 text-on-surface font-bold focus:ring-1 focus:ring-[#10b981]" />
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-2 block">Ergebnis</label>
+                              <input value={res} onChange={e=>setRes(e.target.value)} placeholder="6:4, 6:2" className="w-full bg-surface-container-highest border border-white/5 rounded-xl p-4 text-on-surface font-bold focus:ring-1 focus:ring-[#10b981]" />
+                          </div>
+                          <div>
+                              <label className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-2 block">Modus</label>
+                              <select value={matchType} onChange={e=>setMatchType(e.target.value)} className="w-full bg-surface-container-highest border border-white/5 rounded-xl p-4 text-on-surface font-bold focus:ring-1 focus:ring-[#10b981] appearance-none">
+                                  <option value="tennis_1">Einzel</option>
+                                  <option value="tennis_2">Doppel</option>
+                              </select>
+                          </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                           <div>
@@ -1134,20 +1162,78 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
       );
   };
 
-  const ExerciseConfigView = () => (
+  const ExerciseConfigView = () => {
+      const activeCategories = Array.from(new Set([
+          ...CAT_ORDER,
+          ...(Object.values(data.db) as ExerciseDef[]).map(ex => ex.c)
+      ]));
+
+      const addNew = () => {
+          const id = "ex_" + Date.now();
+          const nd = {...data};
+          nd.db[id] = { id, n: "Neue Übung", c: "Brust", t: "push", h: "0", defW: 0 };
+          saveData(nd);
+      };
+
+      const deleteEx = (id: string) => {
+          if(!window.confirm("Übung wirklich löschen? Historie bleibt erhalten.")) return;
+          const nd = {...data};
+          delete nd.db[id];
+          saveData(nd);
+      };
+
+      return (
       <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
           <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
-              <div className="flex items-center gap-3 mb-6">
-                  <span className="material-symbols-outlined text-primary-container text-3xl">edit_square</span>
-                  <h2 className="font-headline font-black text-2xl tracking-tighter">Übungs-Config</h2>
+              <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-primary-container text-3xl">edit_square</span>
+                      <h2 className="font-headline font-black text-2xl tracking-tighter">Übungs-Config</h2>
+                  </div>
+                  <button onClick={addNew} className="bg-primary-container text-on-primary p-2 rounded-xl shadow-[0_0_15px_rgba(234,179,8,0.3)] hover:scale-105 transition-transform flex items-center justify-center">
+                      <span className="material-symbols-outlined">add</span>
+                  </button>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4">
                   {(Object.values(data.db) as ExerciseDef[]).map(ex => (
                       <div key={ex.id} className="bg-surface-container p-4 rounded-3xl border border-white/5 flex flex-col gap-3">
-                          <div className="flex justify-between items-center">
-                              <span className="font-headline font-bold text-on-surface">{ex.n}</span>
-                              <span className="font-label text-[10px] bg-surface-container-highest px-2 py-1 rounded-md text-on-surface-variant uppercase tracking-widest">{ex.c}</span>
+                          <div className="flex justify-between items-start gap-2">
+                              <input type="text" value={ex.n} onChange={e => {
+                                  const nd = {...data}; nd.db[ex.id].n = e.target.value; saveData(nd);
+                              }} className="font-headline font-bold text-on-surface bg-transparent border-b border-white/10 outline-none w-full pb-1 focus:border-primary-container transition-colors" placeholder="Übungsname"/>
+                              
+                              <button onClick={() => deleteEx(ex.id)} className="text-on-surface-variant hover:text-red-500 transition-colors p-1 flex-shrink-0">
+                                  <span className="material-symbols-outlined text-[20px]">delete</span>
+                              </button>
                           </div>
+                          
+                          <div className="flex gap-2">
+                              <label className="flex flex-col flex-1">
+                                  <span className="font-label text-[8px] text-on-surface-variant uppercase tracking-widest pl-1 mb-1">Kategorie</span>
+                                  <input type="text" list="categories-list" value={ex.c} onChange={e => {
+                                      const nd = {...data}; nd.db[ex.id].c = e.target.value; saveData(nd);
+                                  }} className="font-label text-xs bg-surface-container-highest px-3 py-2 rounded-xl text-on-surface outline-none focus:ring-1 focus:ring-primary-container transition-shadow w-full"/>
+                                  <datalist id="categories-list">
+                                      {activeCategories.map(c => <option key={c} value={c} />)}
+                                  </datalist>
+                              </label>
+                              
+                              <label className="flex flex-col flex-1">
+                                  <span className="font-label text-[8px] text-on-surface-variant uppercase tracking-widest pl-1 mb-1">Typ</span>
+                                  <select value={ex.t} onChange={e => {
+                                      const nd = {...data}; nd.db[ex.id].t = e.target.value as any; saveData(nd);
+                                  }} className="font-label text-xs bg-surface-container-highest px-3 py-2 rounded-xl text-on-surface outline-none focus:ring-1 focus:ring-primary-container transition-shadow w-full">
+                                      <option value="push">Push</option>
+                                      <option value="pull">Pull</option>
+                                      <option value="beine">Beine</option>
+                                      <option value="arme">Arme</option>
+                                      <option value="cardio">Cardio</option>
+                                      <option value="core">Core</option>
+                                      <option value="tennis">Tennis</option>
+                                  </select>
+                              </label>
+                          </div>
+
                           <div className="flex gap-3">
                               <label className="flex items-center gap-2 bg-surface-container-highest p-2 rounded-xl border border-white/5 flex-1 focus-within:ring-1 focus-within:ring-primary-container transition-shadow">
                                   <span className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest pl-1">Height (h)</span>
@@ -1170,7 +1256,8 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
               </div>
           </section>
       </main>
-  );
+      );
+  };
 
   const AnalyticsView = () => {
       const freq: Record<string, number> = {};
@@ -1431,7 +1518,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                                       newDate.setHours(hours, minutes);
                                       setLocalLog({...localLog, d: newDate.getTime()});
                                   }} 
-                                  className="bg-surface-container-highest border border-white/5 rounded-xl px-3 py-2 text-on-surface font-mono font-bold text-center focus:outline-none focus:border-primary-container transition-colors w-24"
+                                  className="bg-surface-container-highest border border-white/5 rounded-xl px-2 py-2 text-on-surface font-mono font-bold text-center focus:outline-none focus:border-primary-container transition-colors min-w-[100px]"
                               />
                           </div>
                       </div>
@@ -1459,7 +1546,9 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                                   )}
                               </h3>
                               <div className="space-y-2">
-                                  {exData.sets.map((s, sIdx) => (
+                                  {exData.sets.map((s, sIdx) => {
+                                      const isCardio = exDef?.t === 'cardio';
+                                      return (
                                       <div key={sIdx} className="flex items-center gap-2">
                                           <div className="w-4 font-label text-[10px] font-bold text-on-surface-variant">#{sIdx+1}</div>
                                           
@@ -1467,22 +1556,26 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                                               const ns = {...localLog};
                                               ns.s[id].sets[sIdx].w = parseFloat(e.target.value);
                                               setLocalLog(ns);
-                                          }} className="w-14 px-0 bg-surface-container-highest border-0 border-b border-white/10 text-on-surface font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors"/>
-                                          <span className="text-[8px] text-on-surface-variant font-bold">KG</span>
+                                          }} className={`${isCardio ? 'w-20' : 'w-14'} px-0 bg-surface-container-highest border-0 border-b border-white/10 text-on-surface font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors`}/>
+                                          <span className="text-[8px] text-on-surface-variant font-bold">{isCardio ? 'MIN' : 'KG'}</span>
                                           
-                                          <input type="number" value={s.r} onChange={e=>{
-                                              const ns = {...localLog};
-                                              ns.s[id].sets[sIdx].r = parseInt(e.target.value);
-                                              setLocalLog(ns);
-                                          }} className="w-10 px-0 bg-surface-container-highest border-0 border-b border-white/10 text-on-surface font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors"/>
-                                          <span className="text-[8px] text-on-surface-variant font-bold">REPS</span>
+                                          {isCardio ? null : (
+                                              <>
+                                                  <input type="number" value={s.r} onChange={e=>{
+                                                      const ns = {...localLog};
+                                                      ns.s[id].sets[sIdx].r = parseInt(e.target.value);
+                                                      setLocalLog(ns);
+                                                  }} className="w-10 px-0 bg-surface-container-highest border-0 border-b border-white/10 text-on-surface font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors"/>
+                                                  <span className="text-[8px] text-on-surface-variant font-bold">REPS</span>
 
-                                          <input type="number" step="0.5" value={s.rpe !== undefined ? s.rpe : ''} onChange={e=>{
-                                              const ns = {...localLog};
-                                              ns.s[id].sets[sIdx].rpe = parseFloat(e.target.value);
-                                              setLocalLog(ns);
-                                          }} className="w-10 px-0 bg-surface-container-highest border-0 border-b border-white/10 text-primary-container font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors" placeholder="-"/>
-                                          <span className="text-[8px] text-on-surface-variant font-bold">RIR</span>
+                                                  <input type="number" step="0.5" value={s.rpe !== undefined ? s.rpe : ''} onChange={e=>{
+                                                      const ns = {...localLog};
+                                                      ns.s[id].sets[sIdx].rpe = parseFloat(e.target.value);
+                                                      setLocalLog(ns);
+                                                  }} className="w-10 px-0 bg-surface-container-highest border-0 border-b border-white/10 text-primary-container font-black text-center py-1 outline-none focus:border-primary-container focus:ring-0 transition-colors" placeholder="-"/>
+                                                  <span className="text-[8px] text-on-surface-variant font-bold">RIR</span>
+                                              </>
+                                          )}
 
                                           <button onClick={()=>{
                                               const ns = {...localLog};
@@ -1492,7 +1585,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                                               <span className="material-symbols-outlined text-[16px]">close</span>
                                           </button>
                                       </div>
-                                  ))}
+                                  )})}
                                   <button onClick={()=>{
                                       const ns = {...localLog};
                                       const lastSet = ns.s[id].sets.length > 0 ? ns.s[id].sets[ns.s[id].sets.length - 1] : null;
@@ -1514,14 +1607,24 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
       );
   };
 
-  const SelectionView = () => (
+  const SelectionView = () => {
+      const activeCategories = Array.from(new Set([
+          ...CAT_ORDER,
+          ...(Object.values(data.db) as ExerciseDef[]).map(ex => ex.c)
+      ]));
+
+      return (
       <main className="flex-1 overflow-y-auto px-6 space-y-6 pb-40 pt-28 max-w-md mx-auto" id="main-content">
         <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
-            {CAT_ORDER.map(cat => (
+            {activeCategories.map(cat => {
+                const categoryExercises = (Object.values(data.db) as ExerciseDef[]).filter(ex => ex.c === cat);
+                if (categoryExercises.length === 0) return null;
+                
+                return (
                 <div key={cat} className="bg-surface-container p-5 rounded-3xl border border-white/5 mb-6">
                     <h3 className="text-primary-container font-label font-bold uppercase mb-4 pl-2 tracking-widest text-[10px]">{cat}</h3>
                     <div className="space-y-2">
-                        {(Object.values(data.db) as ExerciseDef[]).filter(ex => ex.c === cat).sort((a,b)=> calculateExercisePriority(a.id) - calculateExercisePriority(b.id)).map(ex => {
+                        {categoryExercises.sort((a,b)=> calculateExercisePriority(a.id) - calculateExercisePriority(b.id)).map(ex => {
                             const isSelected = !!activeSession.exercises[ex.id];
                             return (
                                 <div key={ex.id} onClick={() => {
@@ -1551,7 +1654,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                         })}
                     </div>
                 </div>
-            ))}
+            )})}
         </section>
         <div className="fixed bottom-24 left-0 right-0 p-4 flex justify-center z-40 pointer-events-none">
              <button onClick={() => {
@@ -1586,7 +1689,8 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
              </button>
         </div>
       </main>
-  );
+      );
+  };
 
   const SettingsView = () => {
       const [showAdmin, setShowAdmin] = useState(false);
