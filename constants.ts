@@ -7194,7 +7194,8 @@ export const FALLBACK_DATA: AppData = {
   userCalStatus: "cut",
   dob: "1978-05-01",
   goals: {"Brust":20,"Rücken":20,"Schultern":20,"Arme":20,"Beine":3},
-  calTargets: {"cut":2300,"bulk":3200,"main":2800}
+  calTargets: {"cut":2300,"bulk":3200,"main":2800},
+  aiLogs: []
 };
 
 export const CAT_ORDER = ["Brust", "Rücken", "Schultern", "Arme", "Beine"];

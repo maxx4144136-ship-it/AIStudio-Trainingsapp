@@ -50,6 +50,7 @@ export interface AppData {
   dob: string; // Date of Birth YYYY-MM-DD
   goals: { [key in MuscleGroup]?: number }; // Custom weekly set goals
   calTargets: { cut: number, bulk: number, main: number }; // Absolute Kcal values
+  aiLogs?: { week: string, text: string, date: number }[];
 }
 
 export interface ActiveSession {

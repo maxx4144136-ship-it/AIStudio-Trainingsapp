@@ -32,7 +32,7 @@ const Header = ({ title, showBack, onBack, onSnapshot, view, userName, userPhoto
   if (view === 'home') {
     return (
       <header className="fixed top-0 w-full z-50 glass-header border-b border-white/5 px-6 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
-        <div className="max-w-md mx-auto flex justify-between items-center">
+        <div className="max-w-md md:max-w-2xl lg:max-w-4xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="relative">
               <img alt="Profile" className="w-10 h-10 rounded-full object-cover border-2 border-primary-container" src={userPhoto || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&h=100&fit=crop"}/>
@@ -54,7 +54,7 @@ const Header = ({ title, showBack, onBack, onSnapshot, view, userName, userPhoto
 
   return (
     <header className="fixed top-0 w-full z-50 glass-header border-b border-white/5 px-6 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
-      <div className="max-w-md mx-auto flex justify-between items-center">
+      <div className="max-w-md md:max-w-2xl lg:max-w-4xl mx-auto flex justify-between items-center">
         {showBack ? (
           <button onClick={onBack} className="p-2 -ml-2 text-on-surface-variant hover:text-white transition-colors">
             <span className="material-symbols-outlined">arrow_back</span>
@@ -78,7 +78,7 @@ const TabBar = ({ currentView, nav }: { currentView: string, nav: (id: string) =
   ];
   return (
     <nav className="fixed bottom-0 w-full z-50 glass-header border-t border-white/5 pb-safe">
-      <div className="max-w-md mx-auto px-6 py-3 flex justify-between items-center">
+      <div className="max-w-md md:max-w-2xl lg:max-w-4xl mx-auto px-6 py-3 flex justify-between items-center">
         {tabs.map(t => {
           const isActive = currentView === t.id;
           return (
@@ -171,7 +171,7 @@ const BodyView = ({ data, saveData, showToast }: { data: AppData, saveData: (d: 
     };
 
     return (
-      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6 pb-32 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
           <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
               <div className="bg-surface-container p-6 rounded-3xl border border-white/5 shadow-2xl mb-6">
                   <h2 className="text-xl font-headline font-black text-on-surface mb-6 uppercase tracking-tighter flex items-center gap-2"><span className="material-symbols-outlined text-primary-container text-[24px]">monitor_weight</span> Gewicht & Steps</h2>
@@ -210,8 +210,8 @@ const BodyView = ({ data, saveData, showToast }: { data: AppData, saveData: (d: 
                   </div>
               )}
 
-              <div className="space-y-3">
-                   <h3 className="text-on-surface-variant font-label font-bold text-[10px] uppercase tracking-widest pl-2 mb-4">Letzte 7 Tage</h3>
+              <h3 className="text-on-surface-variant font-label font-bold text-[10px] uppercase tracking-widest pl-2 mb-4">Letzte 7 Tage</h3>
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                    {last7.map(l => (
                        <div key={l.d} className="bg-surface-container border border-white/5 p-4 rounded-2xl flex items-center justify-between shadow-lg">
                            <div className="text-xs font-label font-bold text-on-surface-variant w-16">{new Date(l.d).toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'})}</div>
@@ -342,7 +342,7 @@ const TrainingView = ({
                 </div>
             )}
             
-            <div className="pt-28 pb-48 px-6 space-y-6 max-w-md mx-auto">
+            <div className="pt-28 pb-48 px-6 space-y-6 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto">
                 <div className="mb-6">
                     <h2 className="text-4xl font-headline font-black text-on-surface tracking-tighter leading-tight uppercase">Heutiges <br/><span className="text-primary-container">Training</span></h2>
                     <p className="text-on-surface-variant font-label font-bold text-sm uppercase tracking-widest mt-2">Aktives Workout</p>
@@ -732,7 +732,7 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
     const insightText = getSmartInsight(data);
     
     return (
-      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
         {/* HERO SECTION */}
         <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
             <h2 className="font-headline font-black text-4xl tracking-tighter leading-[1.1] mb-2">
@@ -765,7 +765,7 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
                     Details <span className="material-symbols-outlined text-[12px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
                 </button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {CAT_ORDER.map((cat, index) => {
                     const current = vol[cat] || 0;
                     const goal = data.goals[cat as MuscleGroup] || 20;
@@ -827,7 +827,7 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
 
         {/* QUICK LINKS */}
         <section className="animate-slide-up" style={{ animationDelay: '0.5s' }}>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                  <button onClick={() => nav('tennis')} className="bg-surface-container p-4 rounded-3xl border border-white/5 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-high active:scale-95 transition-all group">
                     <span className="material-symbols-outlined text-[#10b981] group-hover:scale-110 transition-transform">sports_tennis</span>
                     <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant group-hover:text-white transition-colors">Tennis Log</span>
@@ -900,7 +900,7 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
       };
 
       return (
-          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
               <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
                   <div className="flex items-center gap-3 mb-6">
                       <span className="material-symbols-outlined text-primary-container text-3xl">calendar_month</span>
@@ -934,6 +934,9 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
                       ))}
                   </div>
               </section>
+
+
+
           </main>
       );
   };
@@ -951,13 +954,13 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
       }
 
       return (
-          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
               <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
                   <div className="flex items-center gap-3 mb-6">
                       <span className="material-symbols-outlined text-[#a855f7] text-3xl">medication</span>
                       <h2 className="font-headline font-black text-2xl tracking-tighter">Supplemente</h2>
                   </div>
-                  <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                       {data.userSupps.map((s, i) => (
                           <div key={i} className="flex gap-2 items-center bg-surface-container p-3 rounded-2xl border border-white/5">
                               <input value={s.n} onChange={e=>updateSupp(i,'n',e.target.value)} placeholder="Name" className="flex-1 bg-transparent border-none px-2 py-2 text-sm font-bold text-on-surface focus:ring-0" />
@@ -1007,7 +1010,7 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
       };
 
       return (
-          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
               <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
                   <div className="flex items-center gap-3 mb-6">
                       <span className="material-symbols-outlined text-[#10b981] text-3xl">sports_tennis</span>
@@ -1056,13 +1059,45 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
 
   const AIView = () => {
       const [startD, setStartD] = useState(() => { const d=new Date(); d.setDate(d.getDate()-14); return d.toISOString().split('T')[0]; });
+      const getWeekNumber = (d: Date) => {
+          d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+          d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+          const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+          const weekNo = Math.ceil(( ( (d.getTime() - yearStart.getTime()) / 86400000) + 1)/7);
+          return "KW " + weekNo + " " + d.getUTCFullYear();
+      };
+
       const [endD, setEndD] = useState(() => new Date().toISOString().split('T')[0]);
       const [analysis, setAnalysis] = useState<string | null>(null);
+      const [isNewAnalysis, setIsNewAnalysis] = useState(false);
       const [loading, setLoading] = useState(false);
+      const [confirmDeleteAILogId, setConfirmDeleteAILogId] = useState<number | null>(null);
+
+      const deleteAILog = () => {
+          if (confirmDeleteAILogId !== null) {
+              const newLogs = (data.aiLogs || []).filter(l => l.date !== confirmDeleteAILogId);
+              saveData({ ...data, aiLogs: newLogs });
+              setConfirmDeleteAILogId(null);
+              showToast("Analyse gelöscht 🗑️");
+          }
+      };
+
+      const saveFeedback = () => {
+          if(!analysis) return;
+          const weekLabel = getWeekNumber(new Date());
+          const newLogs = data.aiLogs || [];
+          saveData({
+              ...data,
+              aiLogs: [{ week: weekLabel, text: analysis, date: Date.now() }, ...newLogs]
+          });
+          setIsNewAnalysis(false);
+          showToast("Feedback gespeichert! 💾");
+      };
 
       const analyzeData = async () => {
           setLoading(true);
           setAnalysis(null);
+          setIsNewAnalysis(false);
           try {
               const sTs = new Date(startD).getTime();
               const eTs = new Date(endD).setHours(23,59,59,999);
@@ -1094,16 +1129,17 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
               });
               
               setAnalysis(response.text || "Keine Antwort generiert.");
-          } catch (error) {
+              setIsNewAnalysis(true);
+          } catch (error: any) {
               console.error("AI Analysis failed:", error);
-              setAnalysis("Fehler bei der Analyse. Bitte versuche es später erneut.");
+              setAnalysis("Fehler bei der Analyse (" + String(error?.message || error) + ")");
           } finally {
               setLoading(false);
           }
       };
 
       return (
-          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
               <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
                   <div className="flex items-center gap-3 mb-6">
                       <span className="material-symbols-outlined text-[#3b82f6] text-3xl">smart_toy</span>
@@ -1133,12 +1169,63 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                   
                   {analysis && (
                       <div className="mt-8 bg-surface-container p-6 rounded-3xl border border-[#3b82f6]/30 shadow-[0_0_30px_rgba(59,130,246,0.1)] animate-fade-in">
-                          <h3 className="font-headline font-black text-xl text-[#3b82f6] mb-4 flex items-center gap-2">
-                              <span className="material-symbols-outlined">insights</span>
-                              Dein Feedback
-                          </h3>
+                          <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-headline font-black text-xl text-[#3b82f6] flex items-center gap-2">
+                                <span className="material-symbols-outlined">insights</span>
+                                Dein Feedback
+                            </h3>
+                            {isNewAnalysis && <button onClick={saveFeedback} className="bg-surface-container-highest text-[#3b82f6] hover:bg-[#3b82f6] hover:text-white transition-colors p-2 rounded-xl flex items-center gap-2 font-label text-xs uppercase tracking-widest font-bold">
+                                <span className="material-symbols-outlined text-[18px]">save</span>
+                                Speichern
+                            </button>}
+                          </div>
                           <div className="prose prose-invert prose-sm max-w-none text-on-surface-variant">
                               <Markdown>{analysis}</Markdown>
+                          </div>
+                      </div>
+                  )}
+
+
+                  {confirmDeleteAILogId !== null && (
+                      <div className="fixed inset-0 z-[110] flex items-center justify-center bg-background/80 backdrop-blur-md p-4 animate-fade-in" onClick={() => setConfirmDeleteAILogId(null)}>
+                          <div className="bg-surface-container border border-white/5 p-6 rounded-3xl w-full max-w-sm shadow-2xl relative animate-slide-up" onClick={e=>e.stopPropagation()}>
+                             <h3 className="font-headline text-xl font-black text-on-surface mb-4 tracking-tighter flex items-center gap-2"><span className="material-symbols-outlined text-error text-[24px]">warning</span> Warnung</h3>
+                             <p className="text-on-surface-variant font-body text-sm mb-8">Diese gespeicherte Analyse wirklich löschen?</p>
+                             <div className="flex gap-3">
+                                <button onClick={() => setConfirmDeleteAILogId(null)} className="flex-1 py-4 bg-surface-container-highest rounded-2xl font-label font-bold text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-on-surface transition-colors">Abbrechen</button>
+                                <button onClick={deleteAILog} className="flex-1 py-4 bg-error-container text-error rounded-2xl font-label font-bold text-[10px] uppercase tracking-widest shadow-[0_0_20px_rgba(255,84,73,0.2)] hover:scale-[1.02] active:scale-[0.98] transition-all">Löschen</button>
+                             </div>
+                          </div>
+                      </div>
+                  )}
+                  {data.aiLogs && data.aiLogs.length > 0 && (
+                      <div className="mt-8 space-y-4">
+                          <h3 className="font-headline font-black text-lg text-on-surface flex items-center gap-2">
+                              <span className="material-symbols-outlined text-[#3b82f6]">history</span>
+                              Gespeicherte Analysen
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {data.aiLogs.map((log, i) => (
+                                  <div key={i} className="bg-surface-container p-5 rounded-3xl border border-white/5 shadow-lg">
+                                      <div className="flex justify-between items-start mb-3">
+                                          <div>
+                                            <div className="font-headline font-black text-[#3b82f6]">{log.week}</div>
+                                            <div className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">{new Date(log.date).toLocaleDateString('de-DE')}</div>
+                                          </div>
+                                          <div className="flex gap-2">
+                                              <button onClick={() => { setAnalysis(log.text); setIsNewAnalysis(false); }} className="text-on-surface hover:text-[#3b82f6] transition-colors p-2 bg-surface-container-highest rounded-full flex items-center justify-center">
+                                                  <span className="material-symbols-outlined text-[16px]">visibility</span>
+                                              </button>
+                                              <button onClick={() => setConfirmDeleteAILogId(log.date)} className="text-on-surface hover:text-error transition-colors p-2 bg-surface-container-highest rounded-full flex items-center justify-center">
+                                                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                                              </button>
+                                          </div>
+                                       </div>
+                                       <p className="text-xs text-on-surface-variant line-clamp-3 overflow-hidden text-ellipsis">
+                                          {log.text.replace(/[*#]/g, '')}
+                                       </p>
+                                  </div>
+                              ))}
                           </div>
                       </div>
                   )}
@@ -1169,7 +1256,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
       };
 
       return (
-          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
               <section className="animate-slide-up flex flex-col items-center" style={{ animationDelay: '0.1s' }}>
                   <label className="w-24 h-24 bg-surface-container rounded-full mb-4 border-2 border-primary-container flex items-center justify-center overflow-hidden shadow-[0_0_20px_rgba(255,188,13,0.15)] relative cursor-pointer group">
                       {userPhoto ? (
@@ -1254,7 +1341,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
       };
 
       return (
-      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
           <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
               <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
@@ -1349,7 +1436,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
           const last5Logs = [...logs].reverse().slice(0, 5); // Newest first
 
           return (
-              <main className="flex-1 overflow-y-auto px-6 space-y-6 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+              <main className="flex-1 overflow-y-auto px-6 space-y-6 pb-32 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
                   <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
                       <h2 className="text-xl font-headline font-black text-primary-container mb-6 uppercase tracking-tighter text-center italic">{data.db[analyticsEx]?.n}</h2>
                       <div className="h-72 w-full bg-surface-container rounded-[2rem] p-4 mb-8 border border-white/5 shadow-2xl">
@@ -1404,7 +1491,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
       const steps = data.bodyLogs.length > 0 ? data.bodyLogs[0].s : "--";
       
       return (
-          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6 pb-32 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
               <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
                   <div className="mb-6">
                       <div className="text-primary-container font-label font-bold text-[10px] uppercase tracking-[0.3em] mb-1">Performance Center</div>
@@ -1480,7 +1567,8 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
   const HistoryView = () => {
     const sortedHistory = useMemo(() => [...data.h].sort((a, b) => b.d - a.d), [data.h]);
     return (
-      <main className="flex-1 overflow-y-auto px-6 space-y-4 pb-48 pt-28 max-w-md mx-auto" id="main-content">
+      <main className="flex-1 overflow-y-auto px-6 space-y-4 pb-48 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {sortedHistory.map((log, i) => (
               <div key={log.d} className="bg-surface-container p-5 rounded-3xl border-l-4 border-l-primary-container relative shadow-lg animate-slide-up" style={{ animationDelay: `${i * 0.05}s` }}>
                   <div className="flex justify-between items-start mb-4">
@@ -1509,6 +1597,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                   </div>
               </div>
           ))}
+          </div>
           <div className="h-24 w-full opacity-0 pointer-events-none"></div>
       </main>
     );
@@ -1561,7 +1650,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
       const sortedIds = Object.keys(localLog.s).sort((a, b) => (localLog.s[a].order || 0) - (localLog.s[b].order || 0));
 
       return (
-          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6 pb-32 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
               <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
                   <div className="bg-surface-container p-6 rounded-3xl border border-white/5 mb-6">
                       <div className="flex justify-between items-center mb-4">
@@ -1685,7 +1774,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
       ]));
 
       return (
-      <main className="flex-1 overflow-y-auto px-6 space-y-6 pb-40 pt-28 max-w-md mx-auto" id="main-content">
+      <main className="flex-1 overflow-y-auto px-6 space-y-6 pb-40 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
         <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
             {activeCategories.map(cat => {
                 const categoryExercises = (Object.values(data.db) as ExerciseDef[]).filter(ex => ex.c === cat);
@@ -1694,7 +1783,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                 return (
                 <div key={cat} className="bg-surface-container p-5 rounded-3xl border border-white/5 mb-6">
                     <h3 className="text-primary-container font-label font-bold uppercase mb-4 pl-2 tracking-widest text-[10px]">{cat}</h3>
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {categoryExercises.sort((a,b)=> calculateExercisePriority(a.id) - calculateExercisePriority(b.id)).map(ex => {
                             const isSelected = !!activeSession.exercises[ex.id];
                             return (
@@ -1814,7 +1903,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
       };
 
       return (
-          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6 pb-32 pt-28 max-w-md mx-auto" id="main-content">
+          <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6 pb-32 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
               {showExportModal && (
                   <div className="fixed inset-0 z-[110] flex items-center justify-center bg-background/80 backdrop-blur-md p-4 animate-fade-in" onClick={()=>setShowExportModal(false)}>
                       <div className="bg-surface-container border border-white/5 p-6 rounded-3xl w-full max-w-sm shadow-2xl relative animate-slide-up" onClick={e=>e.stopPropagation()}>
@@ -1826,7 +1915,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                                  <label className="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-2 block">Datum für Export</label>
                                  <input type="date" value={exportDate} onChange={e=>setExportDate(e.target.value)} className="w-full bg-surface-container-highest border border-white/5 rounded-xl p-3 text-on-surface text-sm focus:ring-1 focus:ring-primary-container mb-2" />
                              </div>
-                             <div className="grid grid-cols-2 gap-3">
+                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                  <button onClick={exportTraining} className="w-full py-3 bg-surface-container-highest text-on-surface hover:bg-surface-container-high transition-colors rounded-xl font-label font-bold uppercase text-[10px] tracking-widest flex items-center justify-center gap-2">
                                      <span className="material-symbols-outlined text-[16px]">download</span> Export
                                  </button>
@@ -1941,7 +2030,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
           </div>
       )}
 
-      <main className="max-w-md mx-auto min-h-screen">
+      <main className="max-w-md md:max-w-2xl lg:max-w-4xl mx-auto min-h-screen">
          {view === 'body' ? <BodyView data={data} saveData={saveData} showToast={showToast} /> : 
           view === 'training' ? <TrainingView data={data} saveData={saveData} activeSession={activeSession} updateSession={updateSession} nav={nav} showToast={showToast} /> :
           <CurrentComp />}
