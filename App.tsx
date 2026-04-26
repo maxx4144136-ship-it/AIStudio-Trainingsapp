@@ -322,8 +322,9 @@ const BodyView = ({ data, saveData, showToast }: { data: AppData, saveData: (d: 
 
 // ================= TRAINING VIEW RECOVERY =================
 const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showToast }: any) => {
+    const defaultRest = data.restTimerDefault || 180;
     const [restTime, setRestTime] = useState<number | null>(null);
-    const [restTotal, setRestTotal] = useState(180);
+    const [restTotal, setRestTotal] = useState(defaultRest);
 
     useEffect(() => {
         let interval: any;
@@ -337,7 +338,7 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
         return () => clearInterval(interval);
     }, [restTime]);
 
-    const startRest = (seconds: number = 180) => {
+    const startRest = (seconds: number = defaultRest) => {
         setRestTotal(seconds);
         setRestTime(seconds);
         try { if (window.navigator.vibrate) window.navigator.vibrate(50); } catch(e) {}
@@ -442,16 +443,25 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
                                           <span className="material-symbols-outlined text-[#10b981] text-sm font-black animate-bounce-subtle">verified</span>
                                       )}
                                   </div>
-                                  <input 
-                                      type="number" 
-                                      value={exData.order} 
-                                      onChange={(e) => {
-                                          const ns = JSON.parse(JSON.stringify(activeSession));
-                                          ns.exercises[id].order = parseInt(e.target.value) || 0;
-                                          updateSession(ns);
-                                      }}
-                                      className="w-10 h-10 bg-surface-container-highest text-on-surface font-mono font-black text-center rounded-xl focus:outline-none border border-white/10 p-0"
-                                  />
+                                  <div className="flex-col items-end gap-1 flex">
+                                      <div className="text-xs font-label text-on-surface-variant font-bold text-right">
+                                          {exIds.indexOf(id) + 1}/{exIds.length}
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                           <span className="text-xs font-label text-on-surface-variant font-bold">H:</span>
+                                          <input 
+                                              type="text" 
+                                              value={exDef.h || ""} 
+                                              onChange={(e) => {
+                                                  const nd = JSON.parse(JSON.stringify(data));
+                                                  if (!nd.db[id]) return;
+                                                  nd.db[id].h = e.target.value;
+                                                  saveData(nd);
+                                              }}
+                                              className="w-10 h-6 bg-surface-container-highest text-on-surface font-mono font-black text-center rounded focus:outline-none border border-white/10 p-0 text-xs"
+                                          />
+                                      </div>
+                                  </div>
                              </div>
                              
                              <div className="space-y-2">
@@ -472,7 +482,7 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
                                                   ns.exercises[id].sets[idx].completed = isDone;
                                                   if (isDone) {
                                                       ns.exercises[id].sets[idx].doneAt = Date.now();
-                                                      startRest(180);
+                                                      startRest();
                                                   } else {
                                                       setRestTime(null);
                                                   }
@@ -1460,6 +1470,34 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                       <span className="material-symbols-outlined">add</span>
                   </button>
               </div>
+
+              {/* Rest Timer Config */}
+              <div className="bg-surface-container p-5 rounded-3xl border border-white/5 mb-6 flex justify-between items-center">
+                  <div>
+                      <h3 className="font-headline font-bold text-lg text-on-surface">Standard Pausenzeit</h3>
+                      <p className="text-sm text-on-surface-variant">Pause nach jedem Satz</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                      <select 
+                          value={data.restTimerDefault || 180} 
+                          onChange={(e) => {
+                              const nd = {...data, restTimerDefault: parseInt(e.target.value)};
+                              saveData(nd);
+                          }}
+                          className="bg-surface-container-highest text-on-surface font-bold text-lg px-4 py-2 rounded-xl outline-none focus:ring-2 focus:ring-primary-container border border-white/10"
+                      >
+                          <option value={60}>1:00 min</option>
+                          <option value={90}>1:30 min</option>
+                          <option value={120}>2:00 min</option>
+                          <option value={150}>2:30 min</option>
+                          <option value={180}>3:00 min</option>
+                          <option value={210}>3:30 min</option>
+                          <option value={240}>4:00 min</option>
+                          <option value={300}>5:00 min</option>
+                      </select>
+                  </div>
+              </div>
+
               <div className="space-y-4">
                   {(Object.values(data.db) as ExerciseDef[]).map(ex => (
                       <div key={ex.id} className="bg-surface-container p-4 rounded-3xl border border-white/5 flex flex-col gap-3">
