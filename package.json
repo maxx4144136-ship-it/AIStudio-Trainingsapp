@@ -4,13 +4,15 @@
   "version": "27.24.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "tsx server.ts",
+    "build": "vite build && npx esbuild server.ts --platform=node --format=cjs --outfile=dist/server.cjs --bundle --external:express --external:vite --external:cors --external:garmin-connect",
+    "start": "node dist/server.cjs",
     "preview": "vite preview"
   },
   "dependencies": {
     "@google/genai": "^1.41.0",
     "firebase": "^12.11.0",
+    "garmin-connect": "^1.6.2",
     "lucide-react": "^0.563.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -19,11 +21,17 @@
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.2.1",
     "adm-zip": "^0.5.16",
     "bestzip": "^2.2.1",
+    "cors": "^2.8.6",
+    "esbuild": "^0.28.0",
+    "express": "^5.2.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.2.2",
     "vite": "^5.2.0"
   }

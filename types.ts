@@ -54,6 +54,7 @@ export interface AppData {
   calTargets: { cut: number, bulk: number, main: number }; // Absolute Kcal values
   aiLogs?: { week: string, text: string, date: number }[];
   restTimerDefault?: number; // User preferred rest time in seconds
+  garminConfig?: { u: string, p: string }; // Garmin credentials username/password
 }
 
 export interface ActiveSession {

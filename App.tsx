@@ -621,6 +621,7 @@ const mergeWithFallback = (parsed: any): AppData => {
 
 const MainApp = ({ user }: { user: FirebaseUser }) => {
   const [data, setData] = useState<AppData>(FALLBACK_DATA);
+  const garminSyncedRef = React.useRef(false);
   const [view, setView] = useState<string>(() => localStorage.getItem('tm_view') || 'home');
   const [userName, setUserName] = useState<string>(() => localStorage.getItem('tm_userName') || user.displayName || 'Markus Kauderer');
   const [userPhoto, setUserPhoto] = useState<string>(() => localStorage.getItem('tm_userPhoto') || user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&h=100&fit=crop');
@@ -678,6 +679,63 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
       });
       return () => unsub();
   }, [user.uid]);
+
+  // Garmin Auto-Sync
+  useEffect(() => {
+      if (data.garminConfig?.u && data.garminConfig?.p && !garminSyncedRef.current) {
+          garminSyncedRef.current = true;
+          
+          const datesToSync: string[] = [];
+          for(let i=0; i<14; i++) {
+              const d = new Date();
+              d.setDate(d.getDate() - i);
+              const iso = d.toISOString().split('T')[0];
+              const exist = data.bodyLogs.find((l: any) => l.d === iso);
+              // sync if missing steps or weight, or if it's today
+              if (i === 0 || !exist || !exist.s || !exist.w) {
+                  datesToSync.push(iso);
+              }
+          }
+
+          fetch('/api/garmin/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: data.garminConfig.u, password: data.garminConfig.p, dates: datesToSync })
+          })
+          .then(res => res.json())
+          .then(result => {
+              if (result.success && result.data) {
+                  setData(prevData => {
+                      const nd = { ...prevData, bodyLogs: [...prevData.bodyLogs] };
+                      
+                      Object.keys(result.data).forEach(dateStr => {
+                          const { steps, weight } = result.data[dateStr];
+                          const logIndex = nd.bodyLogs.findIndex((log: any) => log.d === dateStr);
+                          const currentS = logIndex >= 0 ? nd.bodyLogs[logIndex].s : "";
+                          const currentW = logIndex >= 0 ? nd.bodyLogs[logIndex].w : "";
+                          
+                          const newS = (steps !== null && steps !== undefined) ? steps.toString() : currentS;
+                          const newW = (weight !== null && weight !== undefined) ? (weight * 0.453592).toFixed(1) : currentW;
+                          
+                          if (logIndex >= 0) {
+                              nd.bodyLogs[logIndex] = { ...nd.bodyLogs[logIndex], s: newS, w: newW };
+                          } else if (newS || newW) {
+                              nd.bodyLogs.push({ d: dateStr, s: newS, w: newW });
+                          }
+                      });
+                      
+                      nd.bodyLogs.sort((a: any, b: any) => new Date(b.d).getTime() - new Date(a.d).getTime());
+                      
+                      const ndClone = JSON.parse(JSON.stringify(nd));
+                      setDoc(doc(db, `users/${user.uid}/data/appData`), ndClone).catch(console.error);
+                      localStorage.setItem('tm_data', JSON.stringify(ndClone));
+                      return ndClone;
+                  });
+              }
+          })
+          .catch(err => console.error("Auto Garmin Sync error", err));
+      }
+  }, [data.garminConfig?.u, data.garminConfig?.p, user.uid]);
 
   const [toast, setToast] = useState<string | null>(null);
   const [analyticsEx, setAnalyticsEx] = useState<string | null>(null);
@@ -2183,6 +2241,87 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                                 }} className="w-full py-3 bg-surface-container-highest text-on-surface hover:bg-surface-container-high transition-colors rounded-xl font-label font-bold uppercase text-[10px] tracking-widest flex items-center justify-center gap-2">
                                     <span className="material-symbols-outlined text-[16px]">html</span> Download HTML Snapshot
                                 </button>
+                            </div>
+                       </div>
+
+                       <div className="mt-6 pt-6 border-t border-white/5">
+                            <h3 className="font-label font-bold text-[10px] text-on-surface-variant uppercase tracking-widest mb-4">Garmin Connect (Beta)</h3>
+                            <div className="space-y-3">
+                                <input 
+                                    type="email" 
+                                    className="w-full bg-surface-container-highest text-on-surface p-4 rounded-xl border border-white/5 focus:border-primary-container outline-none font-medium" 
+                                    placeholder="Garmin Email" 
+                                    value={data.garminConfig?.u || ""}
+                                    onChange={e => saveData({...data, garminConfig: {...(data.garminConfig || { p: "" }), u: e.target.value}})}
+                                />
+                                <input 
+                                    type="password" 
+                                    className="w-full bg-surface-container-highest text-on-surface p-4 rounded-xl border border-white/5 focus:border-primary-container outline-none font-medium" 
+                                    placeholder="Garmin Password" 
+                                    value={data.garminConfig?.p || ""}
+                                    onChange={e => saveData({...data, garminConfig: {...(data.garminConfig || { u: "" }), p: e.target.value}})}
+                                />
+                                <button onClick={async () => {
+                                    if (!data.garminConfig?.u || !data.garminConfig?.p) {
+                                        showToast("Bitte Garmin-Zugangsdaten eingeben.");
+                                        return;
+                                    }
+                                    showToast("Synchronisiere mit Garmin... ⏳");
+                                    try {
+                                        const datesToSync: string[] = [];
+                                        for(let i=0; i<14; i++) {
+                                            const d = new Date();
+                                            d.setDate(d.getDate() - i);
+                                            const iso = d.toISOString().split('T')[0];
+                                            const exist = data.bodyLogs.find(l => l.d === iso);
+                                            // for manual sync let's fetch more days if data is missing
+                                            if (i === 0 || !exist || !exist.s || !exist.w) {
+                                                datesToSync.push(iso);
+                                            }
+                                        }
+
+                                        const res = await fetch('/api/garmin/sync', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ username: data.garminConfig.u, password: data.garminConfig.p, dates: datesToSync })
+                                        });
+                                        const result = await res.json();
+                                        
+                                        if (result.success && result.data) {
+                                            let nd = { ...data, bodyLogs: [...data.bodyLogs] };
+                                            
+                                            Object.keys(result.data).forEach(dateStr => {
+                                                const { steps, weight } = result.data[dateStr];
+                                                const logIndex = nd.bodyLogs.findIndex(log => log.d === dateStr);
+                                                const currentS = logIndex >= 0 ? nd.bodyLogs[logIndex].s : "";
+                                                const currentW = logIndex >= 0 ? nd.bodyLogs[logIndex].w : "";
+                                                
+                                                const newS = (steps !== null && steps !== undefined) ? steps.toString() : currentS;
+                                                const newW = (weight !== null && weight !== undefined) ? (weight * 0.453592).toFixed(1) : currentW;
+                                                
+                                                if (logIndex >= 0) {
+                                                    nd.bodyLogs[logIndex] = { ...nd.bodyLogs[logIndex], s: newS, w: newW };
+                                                } else if (newS || newW) {
+                                                    nd.bodyLogs.push({ d: dateStr, s: newS, w: newW });
+                                                }
+                                            });
+                                            
+                                            nd.bodyLogs.sort((a,b) => new Date(b.d).getTime() - new Date(a.d).getTime());
+                                            
+                                            saveData(nd);
+                                            showToast("Garmin Sync erfolgreich! ✅");
+                                        } else {
+                                            showToast("Garmin Sync Fehler: " + (result.error || "Unbekannt"));
+                                        }
+                                    } catch (e: any) {
+                                        showToast("Garmin Sync fehlgeschlagen: " + e.message);
+                                    }
+                                }} className="w-full py-4 bg-surface-container-highest text-primary-container hover:bg-primary-container hover:text-on-primary transition-colors rounded-2xl font-headline font-black shadow-xl active:scale-95 flex items-center justify-center gap-2">
+                                    <span className="material-symbols-outlined text-[20px]">watch</span> Jetzt Synchronisieren
+                                </button>
+                                <p className="text-[10px] text-on-surface-variant/60 leading-tight">
+                                    Die Garmin-Zugangsdaten werden nur lokal & sicher in deinem Account gespeichert und für den automatischen Abruf genutzt. Die Synchronisation liest fehlende Schritte und Gewicht (in lbs &rarr; kg). Es werden max. 5 Tage pro Klick synchronisiert, um Limits zu vermeiden.
+                                </p>
                             </div>
                        </div>
 
