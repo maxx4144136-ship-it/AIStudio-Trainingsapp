@@ -13,10 +13,13 @@ async function startServer() {
   app.use(express.json());
 
   app.post('/api/garmin/sync', async (req, res) => {
-    const { username, password, dates } = req.body;
+    let { username, password, dates } = req.body;
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password required' });
     }
+    
+    username = username.trim();
+    password = password.trim();
 
     try {
       const GCClient = new GarminConnect({ username, password });
@@ -68,7 +71,22 @@ async function startServer() {
 
     } catch (error: any) {
       console.error('Garmin Sync Error', error);
-      res.status(500).json({ error: error.message || 'Failed to sync with Garmin Connect' });
+      
+      let errMsg = error.message || 'Unbekannter Fehler';
+      if (error.response?.data) {
+        let details = typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data);
+        if (details.includes('exact pattern')) {
+          errMsg = 'E-Mail Adresse prüfen: Format falsch. (Oder Garmin erfordert Bestätigung).';
+        } else if (details.includes('Invalid credentials') || error.response.status === 401 || error.response.status === 403) {
+           errMsg = 'Falsche E-Mail oder falsches Passwort.';
+        } else {
+           errMsg += " | Details: " + details;
+        }
+      } else if (errMsg.includes('exact pattern')) {
+        errMsg = 'E-Mail Adresse prüfen: Format falsch.';
+      }
+      
+      res.status(500).json({ error: errMsg });
     }
   });
 

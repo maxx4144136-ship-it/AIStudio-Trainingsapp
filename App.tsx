@@ -84,10 +84,10 @@ const TabBar = ({ currentView, nav }: { currentView: string, nav: (id: string) =
           return (
             <button key={t.id} onClick={() => nav(t.id)} className={`flex flex-col items-center gap-1 p-2 group transition-colors ${isActive ? 'text-primary-container' : 'text-on-surface-variant hover:text-white'}`}>
               <div className="relative">
-                <span className={`material-symbols-outlined text-2xl group-hover:scale-110 transition-transform ${isActive ? 'fill-1' : ''}`}>{t.icon}</span>
-                {isActive && <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 bg-primary-container rounded-full"></div>}
+                <span className={`material-symbols-outlined text-2xl group-hover:scale-110 transition-transform ${isActive ? 'fill-1 drop-shadow-[0_0_8px_rgba(255,188,13,0.5)]' : ''}`}>{t.icon}</span>
+                {isActive && <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-[18px] h-[3px] bg-primary-container rounded-full shadow-[0_0_10px_rgba(255,188,13,0.8)]"></div>}
               </div>
-              <span className={`font-label text-[9px] uppercase tracking-widest ${isActive ? 'font-bold' : ''}`}>{t.label}</span>
+              <span className={`font-label text-[9px] uppercase tracking-widest transition-colors ${isActive ? 'font-bold text-primary-container' : ''}`}>{t.label}</span>
             </button>
           );
         })}
@@ -201,21 +201,21 @@ const NumberStepper = ({ value, onChange, step, label, isDecimal, className, hid
 
     return (
         <div className={`flex flex-col items-center justify-center ${hideArrows ? 'pb-1' : ''}`}>
-            { !hideArrows && <button onClick={() => applyStep(1)} className="w-8 flex items-center justify-center text-on-surface-variant hover:text-[#3b82f6] active:scale-95 py-1 min-h-[24px]">
+            { !hideArrows && <button onClick={() => applyStep(1)} className="w-12 flex items-center justify-center text-on-surface-variant bg-white/5 hover:bg-white/10 hover:text-primary-container rounded-t-lg active:scale-95 py-2 min-h-[36px] transition-colors">
                 <span className="material-symbols-outlined text-[20px] leading-none">keyboard_arrow_up</span>
             </button> }
-            <div className={`flex ${label && hideArrows ? 'flex-col' : 'items-baseline'} gap-1 ${!hideArrows ? 'my-[-4px]' : ''}`}>
+            <div className={`flex ${label && hideArrows ? 'flex-col' : 'items-baseline'} gap-1 bg-surface-container-highest px-3 py-1 ${!hideArrows ? 'my-1 rounded-md' : 'rounded-xl'}`}>
                 <input 
                     type="text" 
                     inputMode={isDecimal ? "decimal" : "numeric"}
                     value={localStr}
                     onChange={handleChange}
-                    className={className || "w-16 bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0 leading-none h-8"} 
+                    className={className || "w-14 bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0 leading-none h-8"} 
                     placeholder="-"
                 />
                 {label && <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">{label}</span>}
             </div>
-            { !hideArrows && <button onClick={() => applyStep(-1)} className="w-8 flex items-center justify-center text-on-surface-variant hover:text-[#3b82f6] active:scale-95 py-1 min-h-[24px]">
+            { !hideArrows && <button onClick={() => applyStep(-1)} className="w-12 flex items-center justify-center text-on-surface-variant bg-white/5 hover:bg-white/10 hover:text-primary-container rounded-b-lg active:scale-95 py-2 min-h-[36px] transition-colors">
                 <span className="material-symbols-outlined text-[20px] leading-none">keyboard_arrow_down</span>
             </button> }
         </div>
@@ -1840,36 +1840,47 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
     const sortedHistory = useMemo(() => [...data.h].sort((a, b) => b.d - a.d), [data.h]);
     return (
       <main className="flex-1 overflow-y-auto px-6 space-y-4 pb-48 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sortedHistory.map((log, i) => (
-              <div key={log.d} className="bg-surface-container p-5 rounded-3xl border-l-4 border-l-primary-container relative shadow-lg animate-slide-up" style={{ animationDelay: `${i * 0.05}s` }}>
-                  <div className="flex justify-between items-start mb-4">
-                      <div>
-                          <div className="text-on-surface font-headline font-black text-xl tracking-tighter">{new Date(log.d).toLocaleDateString('de-DE')} <span className="text-sm text-on-surface-variant font-normal">{new Date(log.d).toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit'})}</span></div>
-                          <div className="text-on-surface-variant font-label text-[10px] font-bold uppercase tracking-[0.3em] mt-1">{log.t} DUR</div>
-                          {log.note && <div className="text-xs text-on-surface-variant mt-2 italic border-l-2 border-white/10 pl-2">"{log.note}"</div>}
-                      </div>
-                      <div className="flex gap-2">
-                          <button onClick={()=> {setEditTimestamp(log.d); nav('history-edit');}} className="w-10 h-10 bg-surface-container-highest text-on-surface-variant hover:bg-primary-container hover:text-on-primary transition-colors rounded-full flex items-center justify-center">
-                              <span className="material-symbols-outlined text-[18px]">edit</span>
-                          </button>
-                          <button onClick={(e)=> { e.stopPropagation(); setConfirmDeleteId(log.d); }} className="w-10 h-10 bg-surface-container-highest text-on-surface-variant hover:bg-error-container hover:text-error transition-colors rounded-full flex items-center justify-center relative z-10">
-                              <span className="material-symbols-outlined text-[18px]">delete</span>
-                          </button>
-                      </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2 mt-4">
-                      {Object.keys(log.s).map(id=>{
-                        const name = data.db[id]?.n || id;
-                        return (
-                        <span key={id} className="font-label text-[10px] bg-surface-container-highest px-3 py-1.5 rounded-full text-on-surface-variant font-bold border border-white/5">
-                            {name.substring(0, 24)}{name.length > 24 ? "..." : ""}
-                        </span>
-                      )})}
-                  </div>
+          {sortedHistory.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-8 bg-surface-container border border-white/5 rounded-3xl mt-12 animate-slide-up text-center">
+                  <span className="material-symbols-outlined text-6xl text-primary-container/50 mb-4">history</span>
+                  <p className="font-headline font-black text-xl text-on-surface mb-2 tracking-tight">Keine Einträge</p>
+                  <p className="font-label text-xs text-on-surface-variant max-w-xs leading-relaxed">Dein Logbuch ist leer. Starte jetzt ein Workout, um deine Historie aufzuzeichnen.</p>
+                  <button onClick={() => nav('selection')} className="mt-8 py-3 px-6 bg-primary-container text-on-primary rounded-xl font-label font-bold text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-transform flex items-center justify-center gap-2">
+                      <span className="material-symbols-outlined text-sm">fitness_center</span> Workout Starten
+                  </button>
               </div>
-          ))}
-          </div>
+          ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sortedHistory.map((log, i) => (
+                  <div key={log.d} className="bg-surface-container p-5 rounded-3xl border-l-4 border-l-primary-container relative shadow-lg animate-slide-up" style={{ animationDelay: `${i * 0.05}s` }}>
+                      <div className="flex justify-between items-start mb-4">
+                          <div>
+                              <div className="text-on-surface font-headline font-black text-xl tracking-tighter">{new Date(log.d).toLocaleDateString('de-DE')} <span className="text-sm text-on-surface-variant font-normal">{new Date(log.d).toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit'})}</span></div>
+                              <div className="text-on-surface-variant font-label text-[10px] font-bold uppercase tracking-[0.3em] mt-1">{log.t} DUR</div>
+                              {log.note && <div className="text-xs text-on-surface-variant mt-2 italic border-l-2 border-white/10 pl-2">"{log.note}"</div>}
+                          </div>
+                          <div className="flex gap-2">
+                              <button onClick={()=> {setEditTimestamp(log.d); nav('history-edit');}} className="w-10 h-10 bg-surface-container-highest text-on-surface-variant hover:bg-primary-container hover:text-on-primary transition-colors rounded-full flex items-center justify-center">
+                                  <span className="material-symbols-outlined text-[18px]">edit</span>
+                              </button>
+                              <button onClick={(e)=> { e.stopPropagation(); setConfirmDeleteId(log.d); }} className="w-10 h-10 bg-surface-container-highest text-on-surface-variant hover:bg-error-container hover:text-error transition-colors rounded-full flex items-center justify-center relative z-10">
+                                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                              </button>
+                          </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 mt-4">
+                          {Object.keys(log.s).map(id=>{
+                            const name = data.db[id]?.n || id;
+                            return (
+                            <span key={id} className="font-label text-[10px] bg-surface-container-highest px-3 py-1.5 rounded-full text-on-surface-variant font-bold border border-white/5">
+                                {name.substring(0, 24)}{name.length > 24 ? "..." : ""}
+                            </span>
+                          )})}
+                      </div>
+                  </div>
+              ))}
+              </div>
+          )}
           <div className="h-24 w-full opacity-0 pointer-events-none"></div>
       </main>
     );
@@ -2252,7 +2263,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                                     className="w-full bg-surface-container-highest text-on-surface p-4 rounded-xl border border-white/5 focus:border-primary-container outline-none font-medium" 
                                     placeholder="Garmin Email" 
                                     value={data.garminConfig?.u || ""}
-                                    onChange={e => saveData({...data, garminConfig: {...(data.garminConfig || { p: "" }), u: e.target.value}})}
+                                    onChange={e => saveData({...data, garminConfig: {...(data.garminConfig || { p: "" }), u: e.target.value.trim()}})}
                                 />
                                 <input 
                                     type="password" 
@@ -2389,7 +2400,17 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
   return (
     <div className={`min-h-screen ${THEME.bg} text-on-background font-body selection:bg-primary-container/20 overflow-x-hidden`}>
       <Header view={view} userName={userName} userPhoto={userPhoto} title={titleMap[view] || 'APP'} showBack={view !== 'home'} onBack={() => nav('home')} onSnapshot={() => view === 'settings' ? setShowExportModal(true) : nav('settings')}/>
-      {toast && <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-primary-container text-on-primary font-headline font-bold px-8 py-4 rounded-full z-[100] shadow-2xl animate-fade-in border-2 border-white">{toast}</div>}
+      {toast && (
+          <div className="fixed top-[10%] left-1/2 -translate-x-1/2 bg-surface-container-highest/90 backdrop-blur-xl text-on-surface font-headline font-semibold px-6 py-4 rounded-full z-[100] shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-white/10 animate-slide-up flex items-center gap-3">
+              <span className="absolute inset-0 rounded-full ring-1 ring-inset ring-white/5 pointer-events-none"></span>
+              {toast.includes("⚠️") || toast.includes("Fehler") ? (
+                  <span className="w-3 h-3 bg-error rounded-full animate-pulse-slow shadow-[0_0_10px_rgba(255,180,171,0.6)]"></span>
+              ) : (
+                  <span className="w-3 h-3 bg-primary-container rounded-full animate-pulse-slow shadow-[0_0_10px_rgba(255,188,13,0.6)]"></span>
+              )}
+              {toast}
+          </div>
+      )}
       
       {confirmDeleteId !== null && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center bg-background/80 backdrop-blur-md p-4 animate-fade-in" onClick={()=>setConfirmDeleteId(null)}>
@@ -2428,10 +2449,16 @@ const App = () => {
 
   if (authLoading) {
     return (
-      <div className={`min-h-screen ${THEME.bg} flex items-center justify-center text-white`}>
-        <div className="animate-pulse flex flex-col items-center gap-4">
-          <span className="material-symbols-outlined text-4xl text-primary-container animate-spin">sync</span>
-          <span className="font-headline font-bold uppercase tracking-widest text-sm text-on-surface-variant">Lade Profil...</span>
+      <div className={`min-h-screen ${THEME.bg} relative overflow-hidden flex items-center justify-center text-white`}>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary-container/20 rounded-full blur-[100px] pointer-events-none"></div>
+        <div className="animate-pulse flex flex-col items-center gap-6 z-10">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-surface-container rounded-full"></div>
+            <div className="w-16 h-16 border-4 border-primary-container rounded-full border-t-transparent animate-spin absolute inset-0"></div>
+          </div>
+          <span className="font-label font-bold uppercase tracking-widest text-xs text-on-surface-variant flex gap-2">
+            Loading System <span className="animate-[ping_1.5s_ease-in-out_infinite] px-1 bg-primary-container rounded-full h-1 my-auto"></span>
+          </span>
         </div>
       </div>
     );
@@ -2439,20 +2466,33 @@ const App = () => {
 
   if (!user) {
     return (
-      <div className={`min-h-screen ${THEME.bg} flex flex-col items-center justify-center p-6 text-center`}>
-        <div className="w-24 h-24 bg-surface-container rounded-full mb-8 border-2 border-primary-container flex items-center justify-center shadow-[0_0_30px_rgba(255,188,13,0.2)]">
-          <span className="material-symbols-outlined text-5xl text-primary-container">lock</span>
-        </div>
-        <h1 className="font-headline font-black text-4xl tracking-tighter text-on-surface mb-2">FITNESS MAXX</h1>
-        <p className="font-label text-sm text-on-surface-variant mb-12 max-w-xs">Bitte melde dich an, um auf deine persönlichen Trainingsdaten zuzugreifen.</p>
+      <div className={`min-h-screen ${THEME.bg} relative overflow-hidden flex flex-col items-center justify-center p-6 text-center`}>
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[150%] max-w-3xl h-96 bg-primary-container/10 rounded-full blur-[120px] pointer-events-none"></div>
         
-        <button 
-          onClick={loginWithGoogle}
-          className="w-full max-w-xs py-5 bg-white text-black rounded-3xl font-headline font-black text-lg shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-3"
-        >
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
-          Mit Google anmelden
-        </button>
+        <div className="w-28 h-28 bg-surface-container/80 backdrop-blur-xl rounded-[2.5rem] mb-10 border border-white/10 flex items-center justify-center shadow-[0_20px_60px_rgba(255,188,13,0.15)] relative z-10 animate-slide-up">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent rounded-[2.5rem] pointer-events-none"></div>
+          <span className="material-symbols-outlined text-6xl text-primary-container drop-shadow-lg">bolt</span>
+        </div>
+        
+        <h1 className="font-headline font-black text-5xl tracking-tighter text-on-surface mb-4 relative z-10 animate-slide-up" style={{ animationDelay: '0.1s' }}>
+          TRAINING<span className="text-primary-container opacity-90">MAXX</span>
+        </h1>
+        
+        <p className="font-label text-sm text-on-surface-variant mb-14 max-w-xs relative z-10 animate-slide-up leading-relaxed" style={{ animationDelay: '0.2s' }}>
+          Dein intelligentes System für progressive Performance & AI Analytics.
+        </p>
+        
+        <div className="w-full max-w-xs relative z-10 animate-slide-up" style={{ animationDelay: '0.3s' }}>
+            <button 
+              onClick={loginWithGoogle}
+              className="w-full py-5 bg-on-surface text-background rounded-2xl font-headline font-black text-lg shadow-[0_10px_30px_rgba(255,255,255,0.1)] active:scale-[0.98] hover:bg-white transition-all flex items-center justify-center gap-4 relative overflow-hidden group"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
+              IDENTIFY
+            </button>
+            <p className="mt-6 font-label text-[10px] uppercase tracking-widest text-on-surface-variant/50">Secured via Firebase Auth</p>
+        </div>
       </div>
     );
   }
