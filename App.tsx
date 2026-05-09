@@ -671,289 +671,10 @@ const mergeWithFallback = (parsed: any): AppData => {
     return parsed;
 };
 
-const MainApp = ({ user }: { user: FirebaseUser }) => {
-  const [data, setData] = useState<AppData>(FALLBACK_DATA);
-  const garminSyncedRef = React.useRef(false);
-  const [view, setView] = useState<string>(() => localStorage.getItem('tm_view') || 'home');
-  const [userName, setUserName] = useState<string>(() => localStorage.getItem('tm_userName') || user.displayName || 'Markus Kauderer');
-  const [userPhoto, setUserPhoto] = useState<string>(() => localStorage.getItem('tm_userPhoto') || user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&h=100&fit=crop');
-  const [showExportModal, setShowExportModal] = useState(false);
-  // Initialized from localStorage to prevent loss on reload
-  const [activeSession, setActiveSession] = useState<ActiveSession>(() => {
-      try { 
-        const saved = localStorage.getItem('tm_session');
-        return saved ? JSON.parse(saved) : { start: null, exercises: {} }; 
-      } catch { return { start: null, exercises: {} }; }
-  });
 
-  // Auto-load from Firebase on startup
-  useEffect(() => {
-      const unsub = onSnapshot(doc(db, `users/${user.uid}/data/appData`), (docSnap) => {
-          if (docSnap.exists()) {
-              const loaded = docSnap.data() as AppData;
-              let merged = mergeWithFallback(loaded);
-              
-              // CRITICAL: Prevent Firebase from overwriting local data that hasn't synced yet
-              // Merge local history with Firebase history to ensure no workouts are lost
-              const localDataStr = localStorage.getItem('tm_data');
-              if (localDataStr) {
-                  try {
-                      const localData = JSON.parse(localDataStr);
-                      if (localData.h && localData.h.length > 0) {
-                          // Combine histories and remove duplicates based on timestamp (d)
-                          const combinedHistory = [...(localData.h || []), ...(merged.h || [])];
-                          const uniqueHistoryMap = new Map();
-                          combinedHistory.forEach(item => {
-                              // If duplicate exists, prefer the one with more data or just keep the first encountered (local)
-                              if (!uniqueHistoryMap.has(item.d)) {
-                                  uniqueHistoryMap.set(item.d, item);
-                              }
-                          });
-                          merged.h = Array.from(uniqueHistoryMap.values()).sort((a: any, b: any) => b.d - a.d);
-                          
-                          // If local had more workouts, push the merged result back to Firebase
-                          if (localData.h.length > (loaded.h?.length || 0)) {
-                              console.log("Local data has more workouts. Syncing merged data to Firebase...");
-                              setDoc(doc(db, `users/${user.uid}/data/appData`), merged).catch(e => console.error("Sync back error", e));
-                          }
-                      }
-                  } catch (e) {
-                      console.error("Error merging local data", e);
-                  }
-              }
-
-              setData(merged);
-              localStorage.setItem('tm_data', JSON.stringify(merged));
-              console.log("Auto-loaded and merged data from Firebase");
-          }
-      }, (err) => {
-          console.error("Firebase sync error:", err);
-      });
-      return () => unsub();
-  }, [user.uid]);
-
-  // Garmin Auto-Sync
-  useEffect(() => {
-      if (data.garminConfig?.u && data.garminConfig?.p && !garminSyncedRef.current) {
-          garminSyncedRef.current = true;
-          
-          const datesToSync: string[] = [];
-          for(let i=0; i<7 && datesToSync.length < 3; i++) {
-              const d = new Date();
-              d.setDate(d.getDate() - i);
-              const iso = d.toISOString().split('T')[0];
-              const exist = data.bodyLogs.find((l: any) => l.d === iso);
-              // sync if missing steps or weight, or if it's today
-              if (i === 0 || !exist || !exist.s || !exist.w) {
-                  datesToSync.push(iso);
-              }
-          }
-
-          fetch('/api/garmin/sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ username: data.garminConfig.u, password: data.garminConfig.p, dates: datesToSync })
-          })
-          .then(res => res.json())
-          .then(result => {
-              if (result.success && result.data) {
-                  setData(prevData => {
-                      const nd = { ...prevData, bodyLogs: [...prevData.bodyLogs] };
-                      
-                      Object.keys(result.data).forEach(dateStr => {
-                          const { steps, weight } = result.data[dateStr];
-                          const logIndex = nd.bodyLogs.findIndex((log: any) => log.d === dateStr);
-                          const currentS = logIndex >= 0 ? nd.bodyLogs[logIndex].s : "";
-                          const currentW = logIndex >= 0 ? nd.bodyLogs[logIndex].w : "";
-                          
-                          const newS = (steps !== null && steps !== undefined) ? steps.toString() : currentS;
-                          const newW = (weight !== null && weight !== undefined) ? (weight * 0.453592).toFixed(1) : currentW;
-                          
-                          if (logIndex >= 0) {
-                              nd.bodyLogs[logIndex] = { ...nd.bodyLogs[logIndex], s: newS, w: newW };
-                          } else if (newS || newW) {
-                              nd.bodyLogs.push({ d: dateStr, s: newS, w: newW });
-                          }
-                      });
-                      
-                      nd.bodyLogs.sort((a: any, b: any) => new Date(b.d).getTime() - new Date(a.d).getTime());
-                      
-                      const ndClone = JSON.parse(JSON.stringify(nd));
-                      setDoc(doc(db, `users/${user.uid}/data/appData`), ndClone).catch(console.error);
-                      localStorage.setItem('tm_data', JSON.stringify(ndClone));
-                      return ndClone;
-                  });
-              }
-          })
-          .catch(err => console.error("Auto Garmin Sync error", err));
-      }
-  }, [data.garminConfig?.u, data.garminConfig?.p, user.uid]);
-
-  const [toast, setToast] = useState<string | null>(null);
-  const [analyticsEx, setAnalyticsEx] = useState<string | null>(null);
-  const [editTimestamp, setEditTimestamp] = useState<number | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
-
-  const nav = (id: string) => { 
-      if(id !== 'stats') setAnalyticsEx(null);
-      if(id !== 'history-edit') setEditTimestamp(null);
-      setView(id); 
-      localStorage.setItem('tm_view', id);
-      window.scrollTo(0,0); 
-  };
-
-  useEffect(() => {
-    // Checkpoint log
-    console.log("V27.25 STABLE CHECKPOINT LOADED");
-    
-    const localData = localStorage.getItem('tm_data');
-    if (localData) {
-      try {
-        const parsed = JSON.parse(localData);
-        const merged = mergeWithFallback(parsed);
-        localStorage.setItem('tm_data', JSON.stringify(merged));
-        setData(merged);
-      } catch(e) {
-        console.error("Local Storage Error", e);
-        setData(FALLBACK_DATA);
-      }
-    } else {
-        localStorage.setItem('tm_data', JSON.stringify(FALLBACK_DATA));
-    }
-  }, []);
-
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
-  const saveData = (newData: AppData) => { 
-      setData(newData); 
-      localStorage.setItem('tm_data', JSON.stringify(newData)); 
-      
-      // Auto-Sync to Firebase
-      setDoc(doc(db, `users/${user.uid}/data/appData`), newData)
-      .then(() => {
-          console.log("Firebase sync successful");
-      })
-      .catch(err => {
-          console.error("Firebase save error:", err);
-          showToast("Cloud-Sync Fehler! ⚠️");
-      });
-  };
-  const updateSession = (newSession: ActiveSession) => { setActiveSession(newSession); localStorage.setItem('tm_session', JSON.stringify(newSession)); };
-
-  const executeDelete = () => {
-      if (confirmDeleteId !== null) {
-          const newHistory = data.h.filter(l => l.d !== confirmDeleteId);
-          saveData({ ...data, h: newHistory });
-          setConfirmDeleteId(null);
-          showToast("Eintrag gelöscht 🗑️");
-      }
-  };
-
-  const getWeeklyVolume = () => {
-    const start = new Date(); start.setDate(start.getDate() - (start.getDay()||7) + 1); start.setHours(0,0,0,0);
-    const vol: Record<string, number> = {};
-    data.h.filter(w => w.d >= start.getTime()).forEach(w => {
-      Object.keys(w.s).forEach(exId => {
-        const ex = data.db[exId];
-        if (ex && ex.c !== 'Tennis') vol[ex.c] = (vol[ex.c] || 0) + w.s[exId].sets.filter(s => s.type === 'A').length;
-      });
-    });
-    return vol;
-  };
-
-  const calculateExercisePriority = (exId: string) => {
-      const ex = data.db[exId];
-      if (ex && ex.prio !== undefined) {
-          return ex.prio;
-      }
-
-      const threeWeeksAgo = new Date();
-      threeWeeksAgo.setDate(threeWeeksAgo.getDate() - 21);
-      threeWeeksAgo.setHours(0,0,0,0);
-      
-      let totalSets = 0;
-      data.h.filter(w => w.d >= threeWeeksAgo.getTime()).forEach(w => {
-          if (w.s[exId]) {
-              totalSets += w.s[exId].sets.filter(s => s.type === 'A').length;
-          }
-      });
-      // Higher sets = lower priority number (so it appears first)
-      // If 0 sets, priority is 999
-      return totalSets > 0 ? 100 - totalSets : 999;
-  };
-
-  /* --- VIEWS --- */
-
-  const getSmartInsight = (d: AppData) => {
-      const logs = d.h;
-      if (!logs || logs.length === 0) {
-          return "Willkommen! Starte dein erstes Workout, um hier Auswertungen zu sehen.";
-      }
-
-      const now = new Date();
-      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-      now.setHours(0, 0, 0, 0);
-      
-      const uniqueDates = Array.from(new Set(logs.map(l => {
-          const td = new Date(l.d);
-          td.setMinutes(td.getMinutes() - td.getTimezoneOffset());
-          td.setHours(0, 0, 0, 0);
-          return td.getTime();
-      }))).sort((a,b) => b - a);
-
-      const oneDay = 24 * 60 * 60 * 1000;
-      let streak = 0;
-
-      if (uniqueDates.length > 0) {
-          const diff = Math.round((now.getTime() - uniqueDates[0]) / oneDay);
-          if (diff === 0 || diff === 1) {
-              streak = 1;
-              let currentTs = uniqueDates[0];
-              for (let i = 1; i < uniqueDates.length; i++) {
-                  const checkDiff = Math.round((currentTs - uniqueDates[i]) / oneDay);
-                  if (checkDiff === 1) {
-                      streak++;
-                      currentTs = uniqueDates[i];
-                  } else {
-                      break;
-                  }
-              }
-          }
-      }
-
-      const lastWorkoutDaysAgo = uniqueDates.length > 0 ? Math.round((now.getTime() - uniqueDates[0]) / oneDay) : -1;
-
-      if (streak >= 3) {
-          return `Du bist auf einer ${streak}-Tage Streak! Unglaubliche Konstanz. Weiter so!`;
-      }
-      if (streak === 2) {
-          return "Zwei Tage in Folge trainiert! Starker Rhythmus, bleib dran.";
-      }
-      
-      if (lastWorkoutDaysAgo === 0) {
-          return "Heute schon abgeliefert! Vergiss nicht, Muskeln wachsen in der Regenerationsphase.";
-      } 
-      if (lastWorkoutDaysAgo === 1) {
-          return "Gestern starkes Training absolviert! Wenn du dich fit fühlst, zieh den Plan heute weiter durch.";
-      }
-      if (lastWorkoutDaysAgo > 3) {
-          return `Dein letztes Workout ist ${lastWorkoutDaysAgo} Tage her. Höchste Zeit, wieder anzugreifen!`;
-      }
-      
-      const lastLog = logs.sort((a,b) => b.d - a.d)[0];
-      const setsCount = Object.values(lastLog.s).reduce((acc: number, curr: any) => acc + curr.sets.length, 0);
-      if (setsCount > 10) {
-          return `Dein letztes Workout war ein echtes Volumen-Beast mit ${setsCount} absolvierten Sätzen. Top Leistung!`;
-      }
-
-      const quotes = [
-          "Consistency is the ultimate separator. Keep pushing.",
-          "Der schwerste Schritt ist oft der zur Hantelbank. Den Rest macht die Routine.",
-          "Mache jeden Tag zu deinem Meisterstück."
-      ];
-      return quotes[Math.floor(Date.now() / oneDay) % quotes.length];
-  };
-
-  const HomeView = () => {
+// --- EXTRACTED VIEWS ---
+const HomeView = (props: any) => {
+  const { data, saveData, showToast, nav, user, activeSession, updateSession, confirmDeleteId, setConfirmDeleteId, executeDelete, analyticsEx, setAnalyticsEx, editTimestamp, setEditTimestamp, userName, setUserName, userPhoto, setUserPhoto, showExportModal, setShowExportModal, getWeeklyVolume, calculateExercisePriority, getSmartInsight } = props;
     const vol = getWeeklyVolume();
     const today = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'short' });
     const time = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
@@ -1078,7 +799,8 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
     );
   };
 
-  const PlanView = () => {
+const PlanView = (props: any) => {
+  const { data, saveData, showToast, nav, user, activeSession, updateSession, confirmDeleteId, setConfirmDeleteId, executeDelete, analyticsEx, setAnalyticsEx, editTimestamp, setEditTimestamp, userName, setUserName, userPhoto, setUserPhoto, showExportModal, setShowExportModal, getWeeklyVolume, calculateExercisePriority, getSmartInsight } = props;
       const toggleDay = (idx: number) => {
           const types = ["Push", "Pull", "Legs/Arms", "Rest"];
           const current = data.weekPlan[idx];
@@ -1169,7 +891,8 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
       );
   };
 
-  const SuppsView = () => {
+const SuppsView = (props: any) => {
+  const { data, saveData, showToast, nav, user, activeSession, updateSession, confirmDeleteId, setConfirmDeleteId, executeDelete, analyticsEx, setAnalyticsEx, editTimestamp, setEditTimestamp, userName, setUserName, userPhoto, setUserPhoto, showExportModal, setShowExportModal, getWeeklyVolume, calculateExercisePriority, getSmartInsight } = props;
       const updateSupp = (idx: number, field: string, val: string) => {
           const newSupps = [...data.userSupps];
           (newSupps[idx] as any)[field] = val;
@@ -1209,7 +932,8 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
       );
   };
 
-  const TennisView = () => {
+const TennisView = (props: any) => {
+  const { data, saveData, showToast, nav, user, activeSession, updateSession, confirmDeleteId, setConfirmDeleteId, executeDelete, analyticsEx, setAnalyticsEx, editTimestamp, setEditTimestamp, userName, setUserName, userPhoto, setUserPhoto, showExportModal, setShowExportModal, getWeeklyVolume, calculateExercisePriority, getSmartInsight } = props;
       const [res, setRes] = useState("");
       const [dur, setDur] = useState("60");
       const [outcome, setOutcome] = useState("Sieg");
@@ -1285,7 +1009,8 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
       );
   };
 
-  const AIView = () => {
+const AIView = (props: any) => {
+  const { data, saveData, showToast, nav, user, activeSession, updateSession, confirmDeleteId, setConfirmDeleteId, executeDelete, analyticsEx, setAnalyticsEx, editTimestamp, setEditTimestamp, userName, setUserName, userPhoto, setUserPhoto, showExportModal, setShowExportModal, getWeeklyVolume, calculateExercisePriority, getSmartInsight } = props;
       const [startD, setStartD] = useState(() => { const d=new Date(); d.setDate(d.getDate()-14); return d.toISOString().split('T')[0]; });
       const getWeekNumber = (d: Date) => {
           d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -1462,7 +1187,8 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
       );
   };
 
-  const ProfileView = () => {
+const ProfileView = (props: any) => {
+  const { data, saveData, showToast, nav, user, activeSession, updateSession, confirmDeleteId, setConfirmDeleteId, executeDelete, analyticsEx, setAnalyticsEx, editTimestamp, setEditTimestamp, userName, setUserName, userPhoto, setUserPhoto, showExportModal, setShowExportModal, getWeeklyVolume, calculateExercisePriority, getSmartInsight } = props;
       const bw = data.bodyLogs.length > 0 ? data.bodyLogs[0].w : "--";
       
       const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1548,7 +1274,8 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
       );
   };
 
-  const ExerciseConfigView = () => {
+const ExerciseConfigView = (props: any) => {
+  const { data, saveData, showToast, nav, user, activeSession, updateSession, confirmDeleteId, setConfirmDeleteId, executeDelete, analyticsEx, setAnalyticsEx, editTimestamp, setEditTimestamp, userName, setUserName, userPhoto, setUserPhoto, showExportModal, setShowExportModal, getWeeklyVolume, calculateExercisePriority, getSmartInsight } = props;
       const activeCategories = Array.from(new Set([
           ...CAT_ORDER,
           ...(Object.values(data.db) as ExerciseDef[]).map(ex => ex.c)
@@ -1673,7 +1400,8 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
       );
   };
 
-  const AnalyticsView = () => {
+const AnalyticsView = (props: any) => {
+  const { data, saveData, showToast, nav, user, activeSession, updateSession, confirmDeleteId, setConfirmDeleteId, executeDelete, analyticsEx, setAnalyticsEx, editTimestamp, setEditTimestamp, userName, setUserName, userPhoto, setUserPhoto, showExportModal, setShowExportModal, getWeeklyVolume, calculateExercisePriority, getSmartInsight } = props;
       const freq: Record<string, number> = {};
       data.h.forEach(w => Object.keys(w.s).forEach(id => freq[id] = (freq[id] || 0) + 1));
       if(analyticsEx) {
@@ -1888,7 +1616,8 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
   );
   };
 
-  const HistoryView = () => {
+const HistoryView = (props: any) => {
+  const { data, saveData, showToast, nav, user, activeSession, updateSession, confirmDeleteId, setConfirmDeleteId, executeDelete, analyticsEx, setAnalyticsEx, editTimestamp, setEditTimestamp, userName, setUserName, userPhoto, setUserPhoto, showExportModal, setShowExportModal, getWeeklyVolume, calculateExercisePriority, getSmartInsight } = props;
     const sortedHistory = useMemo(() => [...data.h].sort((a, b) => b.d - a.d), [data.h]);
     return (
       <main className="flex-1 overflow-y-auto px-6 space-y-4 pb-48 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
@@ -1938,7 +1667,8 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
     );
   };
 
-  const HistoryEditView = () => {
+const HistoryEditView = (props: any) => {
+  const { data, saveData, showToast, nav, user, activeSession, updateSession, confirmDeleteId, setConfirmDeleteId, executeDelete, analyticsEx, setAnalyticsEx, editTimestamp, setEditTimestamp, userName, setUserName, userPhoto, setUserPhoto, showExportModal, setShowExportModal, getWeeklyVolume, calculateExercisePriority, getSmartInsight } = props;
       if (!editTimestamp) return null;
       const logIdx = data.h.findIndex(l => l.d === editTimestamp);
       if (logIdx === -1) { nav('history'); return null; }
@@ -2123,7 +1853,8 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
       );
   };
 
-  const SelectionView = () => {
+const SelectionView = (props: any) => {
+  const { data, saveData, showToast, nav, user, activeSession, updateSession, confirmDeleteId, setConfirmDeleteId, executeDelete, analyticsEx, setAnalyticsEx, editTimestamp, setEditTimestamp, userName, setUserName, userPhoto, setUserPhoto, showExportModal, setShowExportModal, getWeeklyVolume, calculateExercisePriority, getSmartInsight } = props;
       const activeCategories = Array.from(new Set([
           ...CAT_ORDER,
           ...(Object.values(data.db) as ExerciseDef[]).map(ex => ex.c)
@@ -2207,6 +1938,315 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
       </main>
       );
   };
+
+const MainApp = ({ user }: { user: FirebaseUser }) => {
+  const [data, setData] = useState<AppData>(FALLBACK_DATA);
+  const garminSyncedRef = React.useRef(false);
+  const [view, setView] = useState<string>(() => localStorage.getItem('tm_view') || 'home');
+  const [userName, setUserName] = useState<string>(() => localStorage.getItem('tm_userName') || user.displayName || 'Markus Kauderer');
+  const [userPhoto, setUserPhoto] = useState<string>(() => localStorage.getItem('tm_userPhoto') || user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&h=100&fit=crop');
+  const [showExportModal, setShowExportModal] = useState(false);
+  // Initialized from localStorage to prevent loss on reload
+  const [activeSession, setActiveSession] = useState<ActiveSession>(() => {
+      try { 
+        const saved = localStorage.getItem('tm_session');
+        return saved ? JSON.parse(saved) : { start: null, exercises: {} }; 
+      } catch { return { start: null, exercises: {} }; }
+  });
+
+  // Auto-load from Firebase on startup
+  useEffect(() => {
+      const unsub = onSnapshot(doc(db, `users/${user.uid}/data/appData`), (docSnap) => {
+          if (docSnap.exists()) {
+              const loaded = docSnap.data() as AppData;
+              let merged = mergeWithFallback(loaded);
+              
+              // CRITICAL: Prevent Firebase from overwriting local data that hasn't synced yet
+              // Merge local history with Firebase history to ensure no workouts are lost
+              const localDataStr = localStorage.getItem('tm_data');
+              if (localDataStr) {
+                  try {
+                      const localData = JSON.parse(localDataStr);
+                      if (localData.h && localData.h.length > 0) {
+                          // Combine histories and remove duplicates based on timestamp (d)
+                          const combinedHistory = [...(localData.h || []), ...(merged.h || [])];
+                          const uniqueHistoryMap = new Map();
+                          combinedHistory.forEach(item => {
+                              // If duplicate exists, prefer the one with more data or just keep the first encountered (local)
+                              if (!uniqueHistoryMap.has(item.d)) {
+                                  uniqueHistoryMap.set(item.d, item);
+                              }
+                          });
+                          merged.h = Array.from(uniqueHistoryMap.values()).sort((a: any, b: any) => b.d - a.d);
+                          
+                          // If local had more workouts, push the merged result back to Firebase
+                          if (localData.h.length > (loaded.h?.length || 0)) {
+                              console.log("Local data has more workouts. Syncing merged data to Firebase...");
+                              setDoc(doc(db, `users/${user.uid}/data/appData`), merged).catch(e => console.error("Sync back error", e));
+                          }
+                      }
+                  } catch (e) {
+                      console.error("Error merging local data", e);
+                  }
+              }
+
+              setData(merged);
+              localStorage.setItem('tm_data', JSON.stringify(merged));
+              console.log("Auto-loaded and merged data from Firebase");
+          }
+      }, (err) => {
+          console.error("Firebase sync error:", err);
+      });
+      return () => unsub();
+  }, [user.uid]);
+
+  // Garmin Auto-Sync
+  useEffect(() => {
+      if (data.garminConfig?.u && data.garminConfig?.p && !garminSyncedRef.current) {
+          garminSyncedRef.current = true;
+          
+          const datesToSync: string[] = [];
+          for(let i=0; i<7 && datesToSync.length < 3; i++) {
+              const d = new Date();
+              d.setDate(d.getDate() - i);
+              const iso = d.toISOString().split('T')[0];
+              const exist = data.bodyLogs.find((l: any) => l.d === iso);
+              // sync if missing steps or weight, or if it's today
+              if (i === 0 || !exist || !exist.s || !exist.w) {
+                  datesToSync.push(iso);
+              }
+          }
+
+          fetch('/api/garmin/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: data.garminConfig.u, password: data.garminConfig.p, dates: datesToSync })
+          })
+          .then(res => res.json())
+          .then(result => {
+              if (result.success && result.data) {
+                  setData(prevData => {
+                      const nd = { ...prevData, bodyLogs: [...prevData.bodyLogs] };
+                      
+                      Object.keys(result.data).forEach(dateStr => {
+                          const { steps, weight } = result.data[dateStr];
+                          const logIndex = nd.bodyLogs.findIndex((log: any) => log.d === dateStr);
+                          const currentS = logIndex >= 0 ? nd.bodyLogs[logIndex].s : "";
+                          const currentW = logIndex >= 0 ? nd.bodyLogs[logIndex].w : "";
+                          
+                          const newS = (steps !== null && steps !== undefined) ? steps.toString() : currentS;
+                          const newW = (weight !== null && weight !== undefined) ? (weight * 0.453592).toFixed(1) : currentW;
+                          
+                          if (logIndex >= 0) {
+                              nd.bodyLogs[logIndex] = { ...nd.bodyLogs[logIndex], s: newS, w: newW };
+                          } else if (newS || newW) {
+                              nd.bodyLogs.push({ d: dateStr, s: newS, w: newW });
+                          }
+                      });
+                      
+                      nd.bodyLogs.sort((a: any, b: any) => new Date(b.d).getTime() - new Date(a.d).getTime());
+                      
+                      const ndClone = JSON.parse(JSON.stringify(nd));
+                      setDoc(doc(db, `users/${user.uid}/data/appData`), ndClone).catch(console.error);
+                      localStorage.setItem('tm_data', JSON.stringify(ndClone));
+                      return ndClone;
+                  });
+              }
+          })
+          .catch(err => console.error("Auto Garmin Sync error", err));
+      }
+  }, [data.garminConfig?.u, data.garminConfig?.p, user.uid]);
+
+  const [toast, setToast] = useState<string | null>(null);
+  const [analyticsEx, setAnalyticsEx] = useState<string | null>(null);
+  const [editTimestamp, setEditTimestamp] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
+  const nav = (id: string) => { 
+      if(id !== 'stats') setAnalyticsEx(null);
+      if(id !== 'history-edit') setEditTimestamp(null);
+      setView(id); 
+      localStorage.setItem('tm_view', id);
+      window.scrollTo(0,0); 
+  };
+
+  useEffect(() => {
+    // Checkpoint log
+    console.log("V27.25 STABLE CHECKPOINT LOADED");
+    
+    const localData = localStorage.getItem('tm_data');
+    if (localData) {
+      try {
+        const parsed = JSON.parse(localData);
+        const merged = mergeWithFallback(parsed);
+        localStorage.setItem('tm_data', JSON.stringify(merged));
+        setData(merged);
+      } catch(e) {
+        console.error("Local Storage Error", e);
+        setData(FALLBACK_DATA);
+      }
+    } else {
+        localStorage.setItem('tm_data', JSON.stringify(FALLBACK_DATA));
+    }
+  }, []);
+
+  const syncTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
+  const saveData = (newData: AppData) => { 
+      setData(newData); 
+      localStorage.setItem('tm_data', JSON.stringify(newData)); 
+      
+      // Auto-Sync to Firebase (Debounced to save bandwidth/API limits)
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+      syncTimeoutRef.current = setTimeout(() => {
+          setDoc(doc(db, `users/${user.uid}/data/appData`), newData)
+          .then(() => {
+              console.log("Firebase sync successful");
+          })
+          .catch(err => {
+              console.error("Firebase save error:", err);
+              // don't spam toast on debounced background sync, but log it
+          });
+      }, 2000); // 2 sec debounce
+  };
+  const updateSession = (newSession: ActiveSession) => { setActiveSession(newSession); localStorage.setItem('tm_session', JSON.stringify(newSession)); };
+
+  const executeDelete = () => {
+      if (confirmDeleteId !== null) {
+          const newHistory = data.h.filter(l => l.d !== confirmDeleteId);
+          saveData({ ...data, h: newHistory });
+          setConfirmDeleteId(null);
+          showToast("Eintrag gelöscht 🗑️");
+      }
+  };
+
+  const getWeeklyVolume = () => {
+    const start = new Date(); start.setDate(start.getDate() - (start.getDay()||7) + 1); start.setHours(0,0,0,0);
+    const vol: Record<string, number> = {};
+    data.h.filter(w => w.d >= start.getTime()).forEach(w => {
+      Object.keys(w.s).forEach(exId => {
+        const ex = data.db[exId];
+        if (ex && ex.c !== 'Tennis') vol[ex.c] = (vol[ex.c] || 0) + w.s[exId].sets.filter(s => s.type === 'A').length;
+      });
+    });
+    return vol;
+  };
+
+  const calculateExercisePriority = (exId: string) => {
+      const ex = data.db[exId];
+      if (ex && ex.prio !== undefined) {
+          return ex.prio;
+      }
+
+      const threeWeeksAgo = new Date();
+      threeWeeksAgo.setDate(threeWeeksAgo.getDate() - 21);
+      threeWeeksAgo.setHours(0,0,0,0);
+      
+      let totalSets = 0;
+      data.h.filter(w => w.d >= threeWeeksAgo.getTime()).forEach(w => {
+          if (w.s[exId]) {
+              totalSets += w.s[exId].sets.filter(s => s.type === 'A').length;
+          }
+      });
+      // Higher sets = lower priority number (so it appears first)
+      // If 0 sets, priority is 999
+      return totalSets > 0 ? 100 - totalSets : 999;
+  };
+
+  /* --- VIEWS --- */
+
+  const getSmartInsight = (d: AppData) => {
+      const logs = d.h;
+      if (!logs || logs.length === 0) {
+          return "Willkommen! Starte dein erstes Workout, um hier Auswertungen zu sehen.";
+      }
+
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      now.setHours(0, 0, 0, 0);
+      
+      const uniqueDates = Array.from(new Set(logs.map(l => {
+          const td = new Date(l.d);
+          td.setMinutes(td.getMinutes() - td.getTimezoneOffset());
+          td.setHours(0, 0, 0, 0);
+          return td.getTime();
+      }))).sort((a,b) => b - a);
+
+      const oneDay = 24 * 60 * 60 * 1000;
+      let streak = 0;
+
+      if (uniqueDates.length > 0) {
+          const diff = Math.round((now.getTime() - uniqueDates[0]) / oneDay);
+          if (diff === 0 || diff === 1) {
+              streak = 1;
+              let currentTs = uniqueDates[0];
+              for (let i = 1; i < uniqueDates.length; i++) {
+                  const checkDiff = Math.round((currentTs - uniqueDates[i]) / oneDay);
+                  if (checkDiff === 1) {
+                      streak++;
+                      currentTs = uniqueDates[i];
+                  } else {
+                      break;
+                  }
+              }
+          }
+      }
+
+      const lastWorkoutDaysAgo = uniqueDates.length > 0 ? Math.round((now.getTime() - uniqueDates[0]) / oneDay) : -1;
+
+      if (streak >= 3) {
+          return `Du bist auf einer ${streak}-Tage Streak! Unglaubliche Konstanz. Weiter so!`;
+      }
+      if (streak === 2) {
+          return "Zwei Tage in Folge trainiert! Starker Rhythmus, bleib dran.";
+      }
+      
+      if (lastWorkoutDaysAgo === 0) {
+          return "Heute schon abgeliefert! Vergiss nicht, Muskeln wachsen in der Regenerationsphase.";
+      } 
+      if (lastWorkoutDaysAgo === 1) {
+          return "Gestern starkes Training absolviert! Wenn du dich fit fühlst, zieh den Plan heute weiter durch.";
+      }
+      if (lastWorkoutDaysAgo > 3) {
+          return `Dein letztes Workout ist ${lastWorkoutDaysAgo} Tage her. Höchste Zeit, wieder anzugreifen!`;
+      }
+      
+      const lastLog = logs.sort((a,b) => b.d - a.d)[0];
+      const setsCount = Object.values(lastLog.s).reduce((acc: number, curr: any) => acc + curr.sets.length, 0);
+      if (setsCount > 10) {
+          return `Dein letztes Workout war ein echtes Volumen-Beast mit ${setsCount} absolvierten Sätzen. Top Leistung!`;
+      }
+
+      const quotes = [
+          "Consistency is the ultimate separator. Keep pushing.",
+          "Der schwerste Schritt ist oft der zur Hantelbank. Den Rest macht die Routine.",
+          "Mache jeden Tag zu deinem Meisterstück."
+      ];
+      return quotes[Math.floor(Date.now() / oneDay) % quotes.length];
+  };
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
 
   const SettingsView = () => {
       const [showAdmin, setShowAdmin] = useState(false);
@@ -2480,7 +2520,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
       <main className="max-w-md md:max-w-2xl lg:max-w-4xl mx-auto min-h-screen">
          {view === 'body' ? <BodyView data={data} saveData={saveData} showToast={showToast} /> : 
           view === 'training' ? <TrainingView data={data} saveData={saveData} activeSession={activeSession} updateSession={updateSession} nav={nav} showToast={showToast} /> :
-          <CurrentComp />}
+          <CurrentComp data={data} saveData={saveData} showToast={showToast} nav={nav} user={user} activeSession={activeSession} updateSession={updateSession} confirmDeleteId={confirmDeleteId} setConfirmDeleteId={setConfirmDeleteId} executeDelete={executeDelete} analyticsEx={analyticsEx} setAnalyticsEx={setAnalyticsEx} editTimestamp={editTimestamp} setEditTimestamp={setEditTimestamp} userName={userName} setUserName={setUserName} userPhoto={userPhoto} setUserPhoto={setUserPhoto} showExportModal={showExportModal} setShowExportModal={setShowExportModal} getWeeklyVolume={getWeeklyVolume} calculateExercisePriority={calculateExercisePriority} getSmartInsight={getSmartInsight} />}
       </main>
       <TabBar currentView={view} nav={nav} />
     </div>
