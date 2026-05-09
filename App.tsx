@@ -107,7 +107,18 @@ const TimerDisplay = ({ startTime }: { startTime: number | null }) => {
         };
         tick();
         const int = setInterval(tick, 1000);
-        return () => clearInterval(int);
+        
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                tick();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        return () => {
+            clearInterval(int);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [startTime]);
 
     return (
@@ -201,22 +212,22 @@ const NumberStepper = ({ value, onChange, step, label, isDecimal, className, hid
 
     return (
         <div className={`flex flex-col items-center justify-center ${hideArrows ? 'pb-1' : ''}`}>
-            { !hideArrows && <button onClick={() => applyStep(1)} className="w-12 flex items-center justify-center text-on-surface-variant bg-white/5 hover:bg-white/10 hover:text-primary-container rounded-t-lg active:scale-95 py-2 min-h-[36px] transition-colors">
-                <span className="material-symbols-outlined text-[20px] leading-none">keyboard_arrow_up</span>
+            { !hideArrows && <button onClick={() => applyStep(1)} className="w-full flex items-center justify-center text-on-surface-variant bg-white/5 hover:bg-white/10 hover:text-primary-container rounded-t-lg active:scale-95 py-1 min-h-[28px] transition-colors">
+                <span className="material-symbols-outlined text-[18px] leading-none">keyboard_arrow_up</span>
             </button> }
-            <div className={`flex ${label && hideArrows ? 'flex-col' : 'items-baseline'} gap-1 bg-surface-container-highest px-3 py-1 ${!hideArrows ? 'my-1 rounded-md' : 'rounded-xl'}`}>
+            <div className={`flex flex-col items-center gap-0 bg-surface-container-highest px-1 sm:px-2 py-1 ${!hideArrows ? 'my-0.5 rounded-md' : 'rounded-xl'}`}>
                 <input 
                     type="text" 
                     inputMode={isDecimal ? "decimal" : "numeric"}
                     value={localStr}
                     onChange={handleChange}
-                    className={className || "w-14 bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0 leading-none h-8"} 
+                    className={className || "w-10 sm:w-14 bg-transparent text-center font-headline font-black text-xl sm:text-2xl text-on-surface outline-none border-none p-0 focus:ring-0 leading-none h-6 sm:h-8"} 
                     placeholder="-"
                 />
-                {label && <span className="text-[10px] font-label font-bold text-on-surface-variant uppercase">{label}</span>}
+                {label && <span className="text-[9px] sm:text-[10px] font-label font-bold text-on-surface-variant uppercase">{label}</span>}
             </div>
-            { !hideArrows && <button onClick={() => applyStep(-1)} className="w-12 flex items-center justify-center text-on-surface-variant bg-white/5 hover:bg-white/10 hover:text-primary-container rounded-b-lg active:scale-95 py-2 min-h-[36px] transition-colors">
-                <span className="material-symbols-outlined text-[20px] leading-none">keyboard_arrow_down</span>
+            { !hideArrows && <button onClick={() => applyStep(-1)} className="w-full flex items-center justify-center text-on-surface-variant bg-white/5 hover:bg-white/10 hover:text-primary-container rounded-b-lg active:scale-95 py-1 min-h-[28px] transition-colors">
+                <span className="material-symbols-outlined text-[18px] leading-none">keyboard_arrow_down</span>
             </button> }
         </div>
     );
@@ -261,39 +272,60 @@ const BodyView = ({ data, saveData, showToast }: { data: AppData, saveData: (d: 
     const chartData = last7.map(l => ({ name: new Date(l.d).toLocaleDateString('de-DE', {weekday:'short'}), Weight: l.w ? parseFloat(l.w.replace(',','.')) : null })).reverse();
 
     return (
-        <main className="pb-24 pt-6 px-4 animate-fade-in relative max-w-lg mx-auto">
-            <h2 className="font-headline font-black text-3xl mb-8 tracking-tight text-on-surface">Gewicht & Activity</h2>
+        <main className="flex-1 overflow-y-auto px-6 space-y-8 pb-32 pt-28 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto" id="main-content">
+            <h2 className="font-headline font-black text-4xl tracking-tighter text-on-surface uppercase italic">Body <span className="text-primary-container">Metrics</span></h2>
             
             <section className="animate-slide-up" style={{animationDelay: '0.1s'}}>
-                <div className="bg-surface-container border border-white/5 p-6 rounded-3xl shadow-2xl relative mb-6">
-                  <div className="flex items-center gap-2 mb-6">
-                      <span className="material-symbols-outlined text-[#3b82f6]">monitor_weight</span>
-                      <h3 className="font-headline font-bold text-lg text-on-surface">Eintrag hinzufügen</h3>
+                <div className="bg-surface-container border border-white/5 p-6 rounded-[2rem] shadow-2xl relative mb-6 overflow-hidden">
+                  <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+                     <span className="material-symbols-outlined text-9xl text-primary-container drop-shadow-[0_0_30px_rgba(255,188,13,1)]">monitor_weight</span>
                   </div>
-                  <div className="mb-4">
-                      <input type="date" value={dateInput} onChange={e=>setDateInput(e.target.value)} className="w-full bg-surface-container-highest p-4 rounded-2xl text-on-surface font-label font-bold outline-none border border-white/5 focus:border-[#3b82f6] transition-colors"/>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                      <div>
-                          <label className="text-[10px] text-[#3b82f6] font-label font-black uppercase tracking-widest block mb-2">Gewicht (KG)</label>
-                          <input type="text" inputMode="decimal" placeholder="00.0" value={w} onChange={e=>setW(e.target.value.replace(/[^0-9.,]/g, ''))} className="w-full bg-surface-container-highest p-4 rounded-2xl text-2xl font-headline font-black text-[#3b82f6] outline-none border border-white/5 focus:border-[#3b82f6] shadow-inner transition-colors"/>
+                  <div className="flex items-center gap-3 mb-8 relative z-10">
+                      <div className="w-10 h-10 rounded-full bg-primary-container/20 flex items-center justify-center border border-primary-container/30">
+                         <span className="material-symbols-outlined text-primary-container">add_chart</span>
                       </div>
-                      <div>
-                          <label className="text-[10px] text-[#10b981] font-label font-black uppercase tracking-widest block mb-2">Steps</label>
-                          <input type="text" inputMode="decimal" placeholder="10k" value={s} onChange={e=>setS(e.target.value.replace(/[^0-9.,]/g, ''))} className="w-full bg-surface-container-highest p-4 rounded-2xl text-2xl font-headline font-black text-[#10b981] outline-none border border-white/5 focus:border-[#10b981] shadow-inner transition-colors"/>
+                      <h3 className="font-headline font-black text-xl text-on-surface uppercase tracking-tighter">Neuer Eintrag</h3>
+                  </div>
+                  <div className="mb-6 relative z-10">
+                      <label className="text-[10px] text-on-surface-variant font-label font-bold uppercase tracking-[0.3em] block mb-2">Datum</label>
+                      <input type="date" value={dateInput} onChange={e=>setDateInput(e.target.value)} className="w-full bg-surface-container-highest p-4 rounded-2xl text-on-surface font-label font-bold outline-none border border-white/5 focus:border-primary-container transition-colors focus:shadow-[0_0_15px_rgba(255,188,13,0.15)]"/>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:gap-4 relative z-10">
+                      <div className="bg-surface-container-highest p-3 sm:p-4 rounded-2xl border border-white/5 focus-within:border-primary-container transition-colors group">
+                          <label className="text-[10px] text-primary-container font-label font-black uppercase tracking-[0.2em] block mb-1 flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">scale</span> Gewicht</label>
+                          <div className="flex items-baseline gap-1">
+                              <input type="text" inputMode="decimal" placeholder="00.0" value={w} onChange={e=>setW(e.target.value.replace(/[^0-9.,]/g, ''))} className="w-full min-w-0 bg-transparent text-xl sm:text-3xl font-headline font-black text-on-surface outline-none border-none p-0 focus:ring-0 transition-colors"/>
+                              <span className="text-on-surface-variant font-label font-bold text-xs uppercase">KG</span>
+                          </div>
+                      </div>
+                      <div className="bg-surface-container-highest p-3 sm:p-4 rounded-2xl border border-white/5 focus-within:border-white/40 transition-colors group">
+                          <label className="text-[10px] text-white font-label font-black uppercase tracking-[0.2em] block mb-1 flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">directions_walk</span> Steps</label>
+                          <div className="flex items-baseline gap-1">
+                              <input type="text" inputMode="decimal" placeholder="10k" value={s} onChange={e=>setS(e.target.value.replace(/[^0-9.,]/g, ''))} className="w-full min-w-0 bg-transparent text-xl sm:text-3xl font-headline font-black text-white outline-none border-none p-0 focus:ring-0 transition-colors"/>
+                          </div>
                       </div>
                   </div>
-                  <button onClick={add} className="w-full mt-6 py-4 bg-primary-container text-on-primary rounded-2xl font-label font-bold shadow-[0_0_20px_rgba(234,179,8,0.2)] text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"><span className="material-symbols-outlined text-[18px]">save</span> Speichern</button>
+                  <button onClick={add} className="w-full mt-8 py-5 bg-primary-container text-on-primary rounded-2xl font-headline font-black shadow-[0_0_30px_rgba(234,179,8,0.3)] text-lg uppercase tracking-widest hover:bg-[#e6a800] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 relative z-10"><span className="material-symbols-outlined text-[24px]">save</span> Speichern</button>
               </div>
 
               {chartData.length > 1 && (
-                  <div className="h-72 w-full bg-surface-container rounded-3xl p-4 border border-white/5 shadow-2xl overflow-hidden mb-6">
+                  <div className="h-80 w-full bg-surface-container rounded-[2rem] p-5 border border-white/5 shadow-2xl overflow-hidden mb-6 relative">
+                      <div className="absolute top-4 left-6 z-10">
+                          <h4 className="font-label font-bold text-[10px] text-on-surface-variant uppercase tracking-[0.3em]">Trend</h4>
+                          <p className="font-headline font-black text-2xl text-primary-container">{chartData[chartData.length-1]?.Weight || '-'}</p>
+                      </div>
                       <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                          <ComposedChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                              <defs>
+                                <linearGradient id="colorGoldBody" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#ffbc0d" stopOpacity={0.4}/>
+                                    <stop offset="95%" stopColor="#ffbc0d" stopOpacity={0}/>
+                                </linearGradient>
+                              </defs>
                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                              <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={10} axisLine={false} tickLine={false} />
-                              <YAxis domain={['auto', 'auto']} stroke="rgba(255,255,255,0.3)" fontSize={10} axisLine={false} tickLine={false} width={40} />
-                              <Area type="monotone" dataKey="Weight" stroke="#3b82f6" fill="rgba(59,130,246,0.1)" strokeWidth={3} dot={{fill: "#3b82f6", r:4, strokeWidth:2, stroke:"#111"}} activeDot={{r:6, strokeWidth:0}}/>
+                              <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={10} axisLine={false} tickLine={false} dy={10} />
+                              <YAxis domain={['auto', 'auto']} stroke="rgba(255,255,255,0.3)" fontSize={10} axisLine={false} tickLine={false} width={50} tickFormatter={(v)=>`${v}kg`} />
+                              <Area type="monotone" dataKey="Weight" stroke="#ffbc0d" fill="url(#colorGoldBody)" strokeWidth={4} dot={{fill: "#ffbc0d", r:6, strokeWidth:2, stroke:"#121212"}} activeDot={{r:8, strokeWidth:0, fill:"#fff"}}/>
                           </ComposedChart>
                       </ResponsiveContainer>
                   </div>
@@ -305,10 +337,10 @@ const BodyView = ({ data, saveData, showToast }: { data: AppData, saveData: (d: 
                            <div className="text-xs font-label font-bold text-on-surface-variant w-16">{new Date(l.d).toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'})}</div>
                            <div className="flex gap-2 flex-1 justify-end items-center">
                                <div className="relative">
-                                   <input type="text" inputMode="decimal" value={l.w || ''} onChange={(e) => updateEntry(l.d, 'w', e.target.value.replace(/[^0-9.,]/g, ''))} className="w-16 bg-surface-container-highest border border-[#3b82f6]/30 rounded-xl py-2 text-center text-sm font-headline font-black text-[#3b82f6] outline-none focus:border-[#3b82f6] transition-colors" placeholder="kg" />
+                                   <input type="text" inputMode="decimal" value={l.w || ''} onChange={(e) => updateEntry(l.d, 'w', e.target.value.replace(/[^0-9.,]/g, ''))} className="w-16 sm:w-20 bg-surface-container-highest border border-[#3b82f6]/30 rounded-xl py-2 px-1 text-center text-sm font-headline font-black text-[#3b82f6] outline-none focus:border-[#3b82f6] transition-colors" placeholder="kg" />
                                </div>
                                <div className="relative">
-                                   <input type="text" inputMode="decimal" value={l.s || ''} onChange={(e) => updateEntry(l.d, 's', e.target.value.replace(/[^0-9.,]/g, ''))} className="w-16 bg-surface-container-highest border border-[#10b981]/30 rounded-xl py-2 text-center text-sm font-headline font-black text-[#10b981] outline-none focus:border-[#10b981] transition-colors" placeholder="steps" />
+                                   <input type="text" inputMode="decimal" value={l.s || ''} onChange={(e) => updateEntry(l.d, 's', e.target.value.replace(/[^0-9.,]/g, ''))} className="w-[84px] sm:w-24 bg-surface-container-highest border border-[#10b981]/30 rounded-xl py-2 px-1 text-center text-sm sm:text-base font-headline font-black text-[#10b981] outline-none focus:border-[#10b981] transition-colors" placeholder="steps" />
                                </div>
                                <button onClick={() => remove(l.d)} className="p-2 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error-container/20 flex items-center justify-center w-8 h-8"><span className="material-symbols-outlined text-[16px]">delete</span></button>
                            </div>
@@ -323,24 +355,40 @@ const BodyView = ({ data, saveData, showToast }: { data: AppData, saveData: (d: 
 // ================= TRAINING VIEW RECOVERY =================
 const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showToast }: any) => {
     const defaultRest = data.restTimerDefault || 180;
-    const [restTime, setRestTime] = useState<number | null>(null);
+    const [restTargetTime, setRestTargetTime] = useState<number | null>(null);
     const [restTotal, setRestTotal] = useState(defaultRest);
+    const [restTimeDisplay, setRestTimeDisplay] = useState<number | null>(null);
 
     useEffect(() => {
         let interval: any;
-        if (restTime !== null && restTime > 0) {
-            interval = setInterval(() => {
-                setRestTime(prev => (prev !== null && prev > 0 ? prev - 1 : null));
-            }, 1000);
-        } else if (restTime === 0) {
-            setRestTime(null);
+        const updateTimer = () => {
+            if (restTargetTime === null) return;
+            const remaining = Math.ceil((restTargetTime - Date.now()) / 1000);
+            if (remaining > 0) {
+                setRestTimeDisplay(remaining);
+            } else {
+                setRestTimeDisplay(null);
+                setRestTargetTime(null);
+            }
+        };
+
+        if (restTargetTime !== null) {
+            updateTimer();
+            interval = setInterval(updateTimer, 500); // 500ms to keep it snappy and allow catch-up
+            document.addEventListener('visibilitychange', updateTimer);
+        } else {
+            setRestTimeDisplay(null);
         }
-        return () => clearInterval(interval);
-    }, [restTime]);
+        
+        return () => {
+            if (interval) clearInterval(interval);
+            document.removeEventListener('visibilitychange', updateTimer);
+        };
+    }, [restTargetTime]);
 
     const startRest = (seconds: number = defaultRest) => {
         setRestTotal(seconds);
-        setRestTime(seconds);
+        setRestTargetTime(Date.now() + seconds * 1000);
         try { if (window.navigator.vibrate) window.navigator.vibrate(50); } catch(e) {}
     };
 
@@ -406,11 +454,14 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
         <main className="pb-32 pt-6 px-2 animate-fade-in relative max-w-lg mx-auto">
             <TimerDisplay startTime={activeSession.start} />
             <RestTimerOverlay 
-                timeLeft={restTime} 
+                timeLeft={restTimeDisplay} 
                 totalTime={restTotal} 
-                onCancel={() => setRestTime(null)} 
+                onCancel={() => {
+                    setRestTargetTime(null);
+                    setRestTimeDisplay(null);
+                }} 
                 onAddSeconds={() => {
-                    setRestTime(prev => (prev !== null ? prev + 15 : null));
+                    setRestTargetTime(prev => (prev !== null ? prev + 15000 : null));
                     setRestTotal(prev => prev + 15);
                 }}
             />
@@ -466,12 +517,12 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
                              
                              <div className="space-y-2">
                                   {exData.sets.map((s: any, idx: number) => (
-                                       <div key={idx} className={`relative flex items-center gap-1 p-2 rounded-2xl border transition-all duration-300 ${(s.done || s.completed) ? 'border-[#10b981]/30 bg-[#10b981]/5 opacity-60 scale-[0.98]' : 'border-white/5 bg-surface-container-highest'}`}>
+                                       <div key={idx} className={`relative flex flex-wrap sm:flex-nowrap items-center justify-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded-2xl border transition-all duration-300 ${(s.done || s.completed) ? 'border-[#10b981]/30 bg-[#10b981]/5 opacity-60 scale-[0.98]' : 'border-white/5 bg-surface-container-highest'}`}>
                                           <button onClick={() => {
                                               const ns = JSON.parse(JSON.stringify(activeSession));
                                               ns.exercises[id].sets[idx].type = s.type === 'W' ? 'A' : 'W';
                                               updateSession(ns);
-                                          }} className={`w-10 h-10 rounded-xl font-headline font-black text-xs flex items-center justify-center flex-shrink-0 ${s.type==='W'?'bg-surface-container-highest border border-white/10 text-on-surface-variant':'bg-primary-container text-on-primary'}`}>{s.type}</button>
+                                          }} className={`w-8 sm:w-10 h-10 rounded-xl font-headline font-black text-xs flex items-center justify-center flex-shrink-0 ${s.type==='W'?'bg-surface-container-highest border border-white/10 text-on-surface-variant':'bg-primary-container text-on-primary'}`}>{s.type}</button>
                                           
                                           <button 
                                               onClick={() => {
@@ -484,11 +535,12 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
                                                       ns.exercises[id].sets[idx].doneAt = Date.now();
                                                       startRest();
                                                   } else {
-                                                      setRestTime(null);
+                                                      setRestTargetTime(null);
+                                                      setRestTimeDisplay(null);
                                                   }
                                                   updateSession(ns);
                                               }} 
-                                              className={`w-12 h-10 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${(s.done || s.completed) ? 'bg-[#10b981] text-black shadow-lg shadow-[#10b981]/20' : 'bg-surface-container-highest border border-white/10 text-on-surface-variant hover:bg-white/5'}`}
+                                              className={`w-10 sm:w-12 h-10 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${(s.done || s.completed) ? 'bg-[#10b981] text-black shadow-lg shadow-[#10b981]/20' : 'bg-surface-container-highest border border-white/10 text-on-surface-variant hover:bg-white/5'}`}
                                           >
                                               <span className="material-symbols-outlined font-black text-xl">{(s.done || s.completed) ? 'check_circle' : 'check'}</span>
                                           </button>
@@ -504,7 +556,7 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
                                                       ns.exercises[id].sets[idx].w = val;
                                                       updateSession(ns);
                                                   }}
-                                                  className="w-[72px] bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0 leading-none h-8"
+                                                  className="w-10 sm:w-[72px] bg-transparent text-center font-headline font-black text-xl sm:text-2xl text-on-surface outline-none border-none p-0 focus:ring-0 leading-none h-6 sm:h-8"
                                               />
                                           </div>
                                           
@@ -521,7 +573,7 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
                                                               ns.exercises[id].sets[idx].r = Math.round(val);
                                                               updateSession(ns);
                                                           }}
-                                                          className="w-12 bg-transparent text-center font-headline font-black text-2xl text-on-surface outline-none border-none p-0 focus:ring-0 leading-none h-8"
+                                                          className="w-8 sm:w-12 bg-transparent text-center font-headline font-black text-xl sm:text-2xl text-on-surface outline-none border-none p-0 focus:ring-0 leading-none h-6 sm:h-8"
                                                       />
                                                   </div>
 
@@ -536,13 +588,13 @@ const TrainingView = ({ data, saveData, activeSession, updateSession, nav, showT
                                                               ns.exercises[id].sets[idx].rpe = isNaN(val) ? undefined : val;
                                                               updateSession(ns);
                                                           }}
-                                                          className="w-12 bg-transparent text-center font-headline font-black text-2xl text-primary-container outline-none border-none p-0 focus:ring-0 leading-none h-8"
+                                                          className="w-8 sm:w-12 bg-transparent text-center font-headline font-black text-xl sm:text-2xl text-primary-container outline-none border-none p-0 focus:ring-0 leading-none h-6 sm:h-8"
                                                       />
                                                   </div>
                                               </>
                                           )}
                                           
-                                          <button onClick={() => removeSet(id, idx)} className="w-8 h-10 flex items-center justify-center text-on-surface-variant hover:text-error transition-colors flex-shrink-0 active:scale-95">
+                                          <button onClick={() => removeSet(id, idx)} className="w-6 sm:w-8 h-10 flex items-center justify-center text-on-surface-variant hover:text-error transition-colors flex-shrink-0 active:scale-95">
                                               <span className="material-symbols-outlined text-[16px]">close</span>
                                           </button>
                                       </div>
@@ -686,7 +738,7 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
           garminSyncedRef.current = true;
           
           const datesToSync: string[] = [];
-          for(let i=0; i<14; i++) {
+          for(let i=0; i<7 && datesToSync.length < 3; i++) {
               const d = new Date();
               d.setDate(d.getDate() - i);
               const iso = d.toISOString().split('T')[0];
@@ -2280,7 +2332,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                                     showToast("Synchronisiere mit Garmin... ⏳");
                                     try {
                                         const datesToSync: string[] = [];
-                                        for(let i=0; i<14; i++) {
+                                        for(let i=0; i<30 && datesToSync.length < 3; i++) {
                                             const d = new Date();
                                             d.setDate(d.getDate() - i);
                                             const iso = d.toISOString().split('T')[0];
@@ -2331,7 +2383,7 @@ Bitte antworte auf Deutsch, sei direkt, motivierend und nutze Markdown für die 
                                     <span className="material-symbols-outlined text-[20px]">watch</span> Jetzt Synchronisieren
                                 </button>
                                 <p className="text-[10px] text-on-surface-variant/60 leading-tight">
-                                    Die Garmin-Zugangsdaten werden nur lokal & sicher in deinem Account gespeichert und für den automatischen Abruf genutzt. Die Synchronisation liest fehlende Schritte und Gewicht (in lbs &rarr; kg). Es werden max. 5 Tage pro Klick synchronisiert, um Limits zu vermeiden.
+                                    Die Garmin-Zugangsdaten werden nur lokal & sicher in deinem Account gespeichert und für den automatischen Abruf genutzt. Die Synchronisation liest fehlende Schritte und Gewicht (in lbs &rarr; kg). Es werden max. 3 Tage pro Klick synchronisiert, um Limits zu vermeiden.
                                 </p>
                             </div>
                        </div>

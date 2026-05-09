@@ -34,8 +34,8 @@ async function startServer() {
           targetDates = [todayIso];
       }
 
-      // Limit to max 5 days to prevent timeout/rate limit (Garmin throws 429 easily)
-      targetDates = targetDates.slice(0, 5);
+      // Limit to max 3 days to prevent timeout/rate limit (Garmin throws 429 easily)
+      targetDates = targetDates.slice(0, 3);
 
       const results: any = {};
       
@@ -51,29 +51,27 @@ async function startServer() {
               }
               results[dateStr] = { steps, weight };
               
-              // Sleep 1.5s to avoid 429 Too Many Requests
-              await new Promise(r => setTimeout(r, 1500));
+              // Sleep 2.5s to avoid 429 Too Many Requests
+              await new Promise(r => setTimeout(r, 2500));
           } catch(err: any) {
               console.error(`Error fetching garmin for date ${dateStr}`, err);
-              if (err?.response?.status === 429 || err?.message?.includes('429')) {
+              if (err?.response?.status === 429 || err?.message?.includes('429') || err?.message?.includes('Rate limited')) {
                   throw new Error('Garmin hat die Anfragen blockiert (429 Too Many Requests). Bitte warte ein paar Minuten.');
               }
           }
       }
 
-      const activities = await GCClient.getActivities(0, 5);
-      
       res.json({
         success: true,
-        data: results,
-        activities
+        data: results
       });
 
     } catch (error: any) {
-      console.error('Garmin Sync Error', error);
-      
       let errMsg = error.message || 'Unbekannter Fehler';
-      if (error.response?.data) {
+      if (error.response?.status === 429 || errMsg.includes('429') || errMsg.includes('Too Many Requests') || errMsg.includes('Rate limited')) {
+        errMsg = 'Garmin System überlastet (Fehler 429 - Zu viele Anfragen). Bitte warte ca. 15-30 Minuten und versuche es erneut.';
+        console.error('Garmin Sync Error: Rate limited (429)');
+      } else if (error.response?.data) {
         let details = typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data);
         if (details.includes('exact pattern')) {
           errMsg = 'E-Mail Adresse prüfen: Format falsch. (Oder Garmin erfordert Bestätigung).';
