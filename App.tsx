@@ -1403,10 +1403,17 @@ const ExerciseConfigView = (props: any) => {
 const AnalyticsView = (props: any) => {
   const { data, saveData, showToast, nav, user, activeSession, updateSession, confirmDeleteId, setConfirmDeleteId, executeDelete, analyticsEx, setAnalyticsEx, editTimestamp, setEditTimestamp, userName, setUserName, userPhoto, setUserPhoto, showExportModal, setShowExportModal, getWeeklyVolume, calculateExercisePriority, getSmartInsight } = props;
       const freq: Record<string, number> = {};
-      data.h.forEach(w => Object.keys(w.s).forEach(id => freq[id] = (freq[id] || 0) + 1));
+      data.h.forEach((w: any) => {
+          Object.keys(w.s).forEach(id => {
+              const exData = w.s[id];
+              if (exData && exData.sets && exData.sets.some((set: any) => set.type === 'A')) {
+                  freq[id] = (freq[id] || 0) + 1;
+              }
+          });
+      });
       if(analyticsEx) {
-          const logs = data.h.filter(l => l.s[analyticsEx]).sort((a,b)=>a.d-b.d);
-          const chartData = logs.map(l => {
+          const logs = data.h.filter((l: any) => l.s[analyticsEx] && l.s[analyticsEx].sets && l.s[analyticsEx].sets.some((s: any) => s.type === 'A')).sort((a: any,b: any)=>a.d-b.d);
+          const chartData = logs.map((l: any) => {
               const workingSets = l.s[analyticsEx].sets.filter(s => s.type === 'A');
               const maxW = workingSets.length > 0 ? Math.max(...workingSets.map(s => s.w)) : 0;
               const maxR = workingSets.length > 0 ? Math.max(...workingSets.filter(s => s.w === maxW).map(s => s.r)) : 0;
@@ -1435,10 +1442,24 @@ const AnalyticsView = (props: any) => {
                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#333" />
                               <XAxis dataKey="date" tick={{fontSize:10, fill:'#94a3b8'}} axisLine={false} tickLine={false} dy={10} />
                               <YAxis domain={['dataMin - 1', 'dataMax + 1']} tickCount={8} tickFormatter={(v) => `${v}kg`} tick={{fontSize:10, fill:'#ffbc0d'}} axisLine={false} tickLine={false} />
-                              <Tooltip contentStyle={{backgroundColor:'#121212', borderRadius:'16px', border:'1px solid #333', color:'#fff'}}/>
-                              <Area type="monotone" dataKey="weight" stroke="#ffbc0d" strokeWidth={4} fillOpacity={1} fill="url(#colorGold)">
-                                  <LabelList dataKey="reps" position="top" style={{ fill: '#ffffff', fontSize: '9px', fontWeight: '900' }} formatter={(val: any) => `${val}x`} offset={10} />
-                              </Area>
+                              <Tooltip
+                                content={({ active, payload, label }) => {
+                                  if (active && payload && payload.length) {
+                                    return (
+                                      <div className="bg-[#121212] border border-[#333] rounded-2xl p-4 shadow-xl">
+                                        <p className="text-on-surface-variant text-xs font-bold mb-2">{label}</p>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-primary-container font-headline font-black text-lg">{payload[0].value}kg</span>
+                                            <span className="text-outline text-xs">x</span>
+                                            <span className="text-white font-headline font-black text-lg">{payload[0].payload.reps}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                }}
+                              />
+                              <Area type="monotone" dataKey="weight" stroke="#ffbc0d" strokeWidth={4} fillOpacity={1} fill="url(#colorGold)" />
                           </AreaChart>
                       </ResponsiveContainer>
                   </div>
