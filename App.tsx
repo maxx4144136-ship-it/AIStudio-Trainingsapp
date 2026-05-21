@@ -8,7 +8,7 @@ import { FALLBACK_DATA, CAT_ORDER } from './constants';
 import { calculateProgression, calculateWarmup, generateSnapshotHTML } from './utils/logic';
 import { fetchFromGitHub, saveToGitHub } from './services/github';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart, CartesianGrid, LabelList, ComposedChart, Bar } from 'recharts';
-import { auth, db, loginWithGoogle, logout } from './firebase';
+import { auth, completeRedirectLogin, db, loginWithGoogle, logout } from './firebase';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { GoogleGenAI } from '@google/genai';
@@ -2553,8 +2553,15 @@ const App = () => {
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
+    completeRedirectLogin().catch((error) => {
+      console.error('Redirect login completion failed:', error);
+    });
+
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      setAuthLoading(false);
+    }, (error) => {
+      console.error('Auth state listener failed:', error);
       setAuthLoading(false);
     });
     return () => unsub();
