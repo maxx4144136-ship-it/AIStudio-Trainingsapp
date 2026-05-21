@@ -2499,6 +2499,12 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
                                 if (localDataStr) {
                                     try {
                                         const localData = JSON.parse(localDataStr);
+                                        const fallbackLast = Math.max(...(FALLBACK_DATA.h || []).map((l: any) => Number(l.d) || 0));
+                                        const localLast = Math.max(...(localData.h || []).map((l: any) => Number(l.d) || 0));
+                                        if ((localData.h?.length || 0) <= FALLBACK_DATA.h.length && localLast <= fallbackLast) {
+                                            showToast("Cloud-Sync blockiert: lokale Daten wirken wie alte Sicherung bis 31.03.");
+                                            return;
+                                        }
                                         setDoc(doc(db, `users/${user.uid}/data/appData`), localData)
                                         .then(() => showToast("Cloud-Sync erfolgreich! ☁️"))
                                         .catch(err => {
