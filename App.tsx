@@ -1962,6 +1962,9 @@ const SelectionView = (props: any) => {
 
 const MainApp = ({ user }: { user: FirebaseUser }) => {
   const [data, setData] = useState<AppData>(FALLBACK_DATA);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [dataLoadError, setDataLoadError] = useState<string | null>(null);
+  const dataReadyRef = React.useRef(false);
   const garminSyncedRef = React.useRef(false);
   const [view, setView] = useState<string>(() => localStorage.getItem('tm_view') || 'home');
   const [userName, setUserName] = useState<string>(() => localStorage.getItem('tm_userName') || user.displayName || 'Markus Kauderer');
@@ -1977,52 +1980,83 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
 
   // Auto-load from Firebase on startup
   useEffect(() => {
+      dataReadyRef.current = false;
+      setDataLoading(true);
+      setDataLoadError(null);
+
       const unsub = onSnapshot(doc(db, `users/${user.uid}/data/appData`), (docSnap) => {
-          if (docSnap.exists()) {
-              const loaded = docSnap.data() as AppData;
-              let merged = mergeWithFallback(loaded);
-              
-              // CRITICAL: Prevent Firebase from overwriting local data that hasn't synced yet
-              // Merge local history with Firebase history to ensure no workouts are lost
-              const localDataStr = localStorage.getItem('tm_data');
-              if (localDataStr) {
-                  try {
-                      const localData = JSON.parse(localDataStr);
-                      if (localData.h && localData.h.length > 0) {
-                          // Combine histories and remove duplicates based on timestamp (d)
-                          const combinedHistory = [...(localData.h || []), ...(merged.h || [])];
-                          const uniqueHistoryMap = new Map();
-                          combinedHistory.forEach(item => {
-                              // If duplicate exists, prefer the one with more data or just keep the first encountered (local)
-                              if (!uniqueHistoryMap.has(item.d)) {
-                                  uniqueHistoryMap.set(item.d, item);
+          try {
+              if (docSnap.exists()) {
+                  const loaded = docSnap.data() as AppData;
+                  let merged = mergeWithFallback(loaded);
+                  
+                  // CRITICAL: Prevent Firebase from overwriting local data that hasn't synced yet
+                  // Merge local history with Firebase history to ensure no workouts are lost
+                  const localDataStr = localStorage.getItem('tm_data');
+                  if (localDataStr) {
+                      try {
+                          const localData = JSON.parse(localDataStr);
+                          if (localData.h && localData.h.length > 0) {
+                              // Combine histories and remove duplicates based on timestamp (d)
+                              const combinedHistory = [...(localData.h || []), ...(merged.h || [])];
+                              const uniqueHistoryMap = new Map();
+                              combinedHistory.forEach(item => {
+                                  // If duplicate exists, prefer the one with more data or just keep the first encountered (local)
+                                  if (!uniqueHistoryMap.has(item.d)) {
+                                      uniqueHistoryMap.set(item.d, item);
+                                  }
+                              });
+                              merged.h = Array.from(uniqueHistoryMap.values()).sort((a: any, b: any) => b.d - a.d);
+                              
+                              // If local had more workouts, push the merged result back to Firebase
+                              if (localData.h.length > (loaded.h?.length || 0)) {
+                                  console.log("Local data has more workouts. Syncing merged data to Firebase...");
+                                  setDoc(doc(db, `users/${user.uid}/data/appData`), merged).catch(e => console.error("Sync back error", e));
                               }
-                          });
-                          merged.h = Array.from(uniqueHistoryMap.values()).sort((a: any, b: any) => b.d - a.d);
-                          
-                          // If local had more workouts, push the merged result back to Firebase
-                          if (localData.h.length > (loaded.h?.length || 0)) {
-                              console.log("Local data has more workouts. Syncing merged data to Firebase...");
-                              setDoc(doc(db, `users/${user.uid}/data/appData`), merged).catch(e => console.error("Sync back error", e));
                           }
+                      } catch (e) {
+                          console.error("Error merging local data", e);
                       }
-                  } catch (e) {
-                      console.error("Error merging local data", e);
                   }
+
+                  setData(merged);
+                  localStorage.setItem('tm_data', JSON.stringify(merged));
+                  dataReadyRef.current = true;
+                  setDataLoading(false);
+                  console.log("Auto-loaded and merged data from Firebase");
+                  return;
               }
 
-              setData(merged);
-              localStorage.setItem('tm_data', JSON.stringify(merged));
-              console.log("Auto-loaded and merged data from Firebase");
+              // No cloud document: use existing local data if present, but never seed localStorage
+              // with the hardcoded March fallback. That fallback is only a display skeleton.
+              const localDataStr = localStorage.getItem('tm_data');
+              if (localDataStr) {
+                  const merged = mergeWithFallback(JSON.parse(localDataStr));
+                  setData(merged);
+              } else {
+                  console.warn("No Firebase appData document and no local tm_data. Showing fallback without writing it.");
+                  setData(FALLBACK_DATA);
+              }
+              dataReadyRef.current = true;
+              setDataLoading(false);
+          } catch (e) {
+              console.error("Firebase data handling error:", e);
+              setDataLoadError("Daten konnten nicht sauber geladen werden.");
+              dataReadyRef.current = false;
+              setDataLoading(false);
           }
       }, (err) => {
           console.error("Firebase sync error:", err);
+          setDataLoadError("Cloud-Daten konnten nicht geladen werden.");
+          dataReadyRef.current = false;
+          setDataLoading(false);
       });
       return () => unsub();
   }, [user.uid]);
 
   // Garmin Auto-Sync
   useEffect(() => {
+      if (!dataReadyRef.current || dataLoadError) return;
       if (data.garminConfig?.u && data.garminConfig?.p && !garminSyncedRef.current) {
           garminSyncedRef.current = true;
           
@@ -2107,7 +2141,9 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
         setData(FALLBACK_DATA);
       }
     } else {
-        localStorage.setItem('tm_data', JSON.stringify(FALLBACK_DATA));
+        // Do not write FALLBACK_DATA into localStorage. It is only a bundled safety copy
+        // and currently only goes up to March; writing it can look like data loss.
+        console.warn('No local tm_data yet; waiting for Firebase instead of seeding fallback.');
     }
   }, []);
 
@@ -2118,6 +2154,12 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
       setData(newData); 
       localStorage.setItem('tm_data', JSON.stringify(newData)); 
       
+      if (!dataReadyRef.current || dataLoadError) {
+          console.warn('Skipping Firebase write until cloud data has loaded safely.');
+          showToast("Cloud lädt noch — lokal gesichert, kein Überschreiben.");
+          return;
+      }
+
       // Auto-Sync to Firebase (Debounced to save bandwidth/API limits)
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
       syncTimeoutRef.current = setTimeout(() => {
@@ -2509,6 +2551,31 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
   const srcMap: Record<string, any> = { home: HomeView, plan: PlanView, supps: SuppsView, tennis: TennisView, profile: ProfileView, ai: AIView, 'ex-config': ExerciseConfigView, selection: SelectionView, stats: AnalyticsView, history: HistoryView, 'history-edit': HistoryEditView, settings: SettingsView };
   const CurrentComp = srcMap[view] || HomeView;
   const titleMap: Record<string, string> = { home:'DASHBOARD', plan:'PLANUNG', supps:'STACK', tennis:'COURT', profile:'PROFIL', ai:'INTELLIGENCE', 'ex-config':'CONFIG', selection:'AUSWAHL', training:'WORKOUT', stats:'ANALYSE', history:'LOGBUCH', 'history-edit':'EDIT LOG', body:'METRICS', settings:'SYSTEM' };
+
+  if (dataLoading) {
+    return (
+      <div className={`min-h-screen ${THEME.bg} text-on-background font-body flex items-center justify-center p-6`}>
+        <div className="bg-surface-container border border-white/10 rounded-3xl p-8 max-w-sm text-center shadow-2xl">
+          <div className="w-14 h-14 border-4 border-primary-container border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+          <h2 className="font-headline font-black text-xl text-on-surface mb-2">Cloud-Daten werden geladen</h2>
+          <p className="text-sm text-on-surface-variant leading-relaxed">Ich zeige erst Daten an, wenn Firebase geantwortet hat — damit keine alte Sicherung bis 31.03. als aktueller Stand erscheint.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (dataLoadError) {
+    return (
+      <div className={`min-h-screen ${THEME.bg} text-on-background font-body flex items-center justify-center p-6`}>
+        <div className="bg-surface-container border border-error/30 rounded-3xl p-8 max-w-sm text-center shadow-2xl">
+          <span className="material-symbols-outlined text-error text-5xl mb-4">cloud_off</span>
+          <h2 className="font-headline font-black text-xl text-on-surface mb-2">Cloud-Sync blockiert</h2>
+          <p className="text-sm text-on-surface-variant leading-relaxed mb-4">{dataLoadError}</p>
+          <button onClick={() => window.location.reload()} className="w-full py-4 bg-primary-container text-on-primary rounded-2xl font-label font-bold text-xs uppercase tracking-widest">Neu laden</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen ${THEME.bg} text-on-background font-body selection:bg-primary-container/20 overflow-x-hidden`}>
