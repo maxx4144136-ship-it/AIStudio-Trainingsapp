@@ -2126,24 +2126,15 @@ const MainApp = ({ user }: { user: FirebaseUser }) => {
   };
 
   useEffect(() => {
-    // Checkpoint log
-    console.log("V27.25 STABLE CHECKPOINT LOADED");
-    
-    const localData = localStorage.getItem('tm_data');
-    if (localData) {
-      try {
-        const parsed = JSON.parse(localData);
-        const merged = mergeWithFallback(parsed);
-        localStorage.setItem('tm_data', JSON.stringify(merged));
-        setData(merged);
-      } catch(e) {
-        console.error("Local Storage Error", e);
-        setData(FALLBACK_DATA);
-      }
-    } else {
-        // Do not write FALLBACK_DATA into localStorage. It is only a bundled safety copy
-        // and currently only goes up to March; writing it can look like data loss.
-        console.warn('No local tm_data yet; waiting for Firebase instead of seeding fallback.');
+    console.log("V27.26 CLOUD-FIRST DATA LOAD");
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('clearLocalData') === '1') {
+      localStorage.removeItem('tm_data');
+      localStorage.removeItem('tm_session');
+      showToast("Lokale alte Daten gelöscht — Cloud wird neu geladen.");
+      params.delete('clearLocalData');
+      const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`;
+      window.history.replaceState({}, '', nextUrl);
     }
   }, []);
 
